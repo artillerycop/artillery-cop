@@ -1,6 +1,7 @@
 /*
- * Catalogue v2 — feuille de style « lookbook »
- * Fond sombre, images au premier plan, coins arrondis, accent champagne.
+ * Artillery Cop — feuille de style « lookbook »
+ * Fond sombre, images au premier plan, coins arrondis, noir et blanc comme le logo.
+ * Titres en capitales condensées, dans l'esprit du monogramme anguleux.
  * Mobile d'abord : les règles de base visent le téléphone, les @media élargissent.
  */
 
@@ -14,15 +15,16 @@
   --discret: #8f897e; /* contraste ≥ 5:1 */
   --filet: #2a2926;
   --filet-fort: #3d3b37;
-  --accent: #c9a96e; /* remplacé par config.js */
-  --sur-accent: #15120c;
+  --accent: #f3f0ea; /* remplacé par config.js */
+  --sur-accent: #0b0b0a;
 
-  --serif: "Playfair Display", "Didot", Georgia, serif;
+  --serif: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif; /* police des titres */
   --sans: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
 
   --rayon: 14px;
   --rayon-petit: 9px;
   --marge: 16px;
+  --hauteur-onglets: 64px;
   --lent: 500ms cubic-bezier(0.22, 0.61, 0.36, 1);
   --moyen: 250ms ease;
 
@@ -46,6 +48,7 @@ html {
 
 body {
   margin: 0;
+  -webkit-tap-highlight-color: transparent;
   background: var(--fond);
   color: var(--texte);
   font-family: var(--sans);
@@ -157,8 +160,8 @@ select {
   border-radius: 12px;
   background: none;
   font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   text-decoration: none;
   cursor: pointer;
   transition: background var(--moyen), color var(--moyen), border-color var(--moyen), transform var(--moyen);
@@ -171,7 +174,7 @@ select {
   color: var(--sur-accent);
 }
 .bouton--plein:hover {
-  background: #d8bb84;
+  background: #ffffff;
 }
 .bouton--contour {
   border-color: var(--filet-fort);
@@ -200,12 +203,12 @@ select {
 /* Cœur posé sur les images */
 .coeur {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 10px;
   background: rgba(11, 11, 10, 0.55);
@@ -250,17 +253,20 @@ select {
 }
 .barre__marque {
   justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
   font-family: var(--serif);
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .barre__marque img {
-  height: 30px;
+  height: 27px;
   width: auto;
 }
 .barre__actions {
@@ -295,6 +301,9 @@ select {
   margin: 0;
   font-family: var(--serif);
   font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 .menu__liens,
 .menu__liste {
@@ -376,9 +385,11 @@ select {
 .titre-section {
   margin: 0;
   font-family: var(--serif);
-  font-weight: 500;
-  font-size: clamp(24px, 6vw, 32px);
-  line-height: 1.15;
+  font-weight: 700;
+  font-size: clamp(22px, 5.5vw, 30px);
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .titre-section--petit {
   font-size: 20px;
@@ -387,16 +398,22 @@ select {
 
 /* Accueil : titre */
 .hero {
-  padding: 36px 0 12px;
+  padding: 32px 0 8px;
   text-align: center;
+}
+.hero__logo {
+  width: clamp(84px, 24vw, 120px);
+  height: auto;
+  margin: 0 auto 16px;
 }
 .hero__titre {
   margin: 0;
   font-family: var(--serif);
-  font-weight: 600;
-  font-size: clamp(34px, 10vw, 72px);
-  line-height: 1.05;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  font-size: clamp(30px, 9vw, 60px);
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 .hero__titre em,
 .entete-liste__titre em {
@@ -468,9 +485,12 @@ select {
 }
 .voir-tout {
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--texte-doux);
   font-size: 14px;
   text-decoration: none;
+}
+.voir-tout:hover {
+  color: var(--texte);
 }
 .voir-tout:hover {
   text-decoration: underline;
@@ -511,6 +531,12 @@ select {
 }
 .vignette > a:hover .vignette__image {
   transform: scale(1.04);
+}
+.carrousel--haut .vignette {
+  width: clamp(170px, 48vw, 260px);
+}
+.carrousel--haut .vignette > a {
+  aspect-ratio: 3 / 4;
 }
 .carrousel--petit .vignette {
   width: 120px;
@@ -590,7 +616,7 @@ select {
 }
 .groupe__n {
   font-size: 13px;
-  color: var(--accent);
+  color: var(--texte-doux);
 }
 
 /* ---------- Liste (catégorie, marque, recherche) ---------- */
@@ -607,7 +633,7 @@ select {
   height: 44px;
   flex-shrink: 0;
   border-radius: 12px;
-  color: var(--accent);
+  color: var(--texte);
   font-size: 26px;
   text-decoration: none;
 }
@@ -617,9 +643,15 @@ select {
 .entete-liste__titre {
   margin: 0;
   font-family: var(--serif);
-  font-weight: 600;
+  font-weight: 700;
   font-size: clamp(28px, 8vw, 46px);
-  line-height: 1.1;
+  line-height: 1.05;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.entete-liste__titre em {
+  font-style: normal;
+  color: var(--texte-doux);
 }
 .entete-liste__compte {
   margin: 4px 0 0;
@@ -627,10 +659,18 @@ select {
   font-size: 13px;
 }
 
+/* Barre de recherche + tri : reste visible sous la barre du haut en faisant défiler */
 .outils {
+  position: sticky;
+  top: 68px;
+  z-index: 10;
   display: flex;
   gap: 10px;
-  margin-top: 18px;
+  margin: 18px calc(var(--marge) * -1) 0;
+  padding: 10px var(--marge);
+  background: rgba(11, 11, 10, 0.92);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 .selection-tri {
   height: 44px;
@@ -763,6 +803,9 @@ select {
   margin: 0 0 8px;
   font-family: var(--serif);
   font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .vide__texte {
   max-width: 420px;
@@ -895,15 +938,17 @@ dialog {
   color: var(--texte);
 }
 .etiquette--marque {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--texte-doux);
+  color: var(--texte);
 }
 .fiche__titre {
   margin: 0;
   font-family: var(--serif);
-  font-weight: 600;
-  font-size: clamp(24px, 6vw, 34px);
-  line-height: 1.15;
+  font-weight: 700;
+  font-size: clamp(26px, 7vw, 38px);
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .fiche__sous {
@@ -927,11 +972,21 @@ dialog {
 .fiche__details dd {
   margin: 0;
 }
+/* Sur téléphone, le bouton de sélection reste à portée du pouce en bas de l'écran */
 .fiche__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr auto;
   gap: 10px;
-  margin-top: 22px;
+  margin: 22px calc(var(--marge) * -1) 0;
+  padding: 12px var(--marge) max(12px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(11, 11, 10, 0), var(--fond) 30%);
+}
+.fiche__actions .bouton {
+  padding: 0 16px;
+  white-space: nowrap;
 }
 .fiche__similaires {
   margin-top: 34px;
@@ -941,7 +996,7 @@ dialog {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: max(20px, env(safe-area-inset-bottom));
+  bottom: calc(var(--hauteur-onglets) + 16px + env(safe-area-inset-bottom));
   z-index: 200;
   margin: 0;
   padding: 12px 18px;
@@ -967,6 +1022,184 @@ dialog {
   text-align: center;
   font-size: 12px;
   color: var(--discret);
+}
+
+/* ---------- Barre d'onglets (téléphone) ---------- */
+.onglets {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: calc(var(--hauteur-onglets) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: rgba(11, 11, 10, 0.9);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid var(--filet);
+}
+.onglets a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--discret);
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.onglets a[aria-current="page"] {
+  color: var(--texte);
+}
+.onglets__icone {
+  position: relative;
+  display: grid;
+}
+.onglets .pastille {
+  top: -6px;
+  right: -12px;
+}
+
+/* ---------- Explorer : onglets et index A–Z ---------- */
+.segments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 4px;
+  border: 1px solid var(--filet-fort);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--texte-doux);
+}
+.segment span {
+  font-weight: 400;
+  color: var(--discret);
+}
+.segment.est-actif {
+  background: var(--accent);
+  color: var(--sur-accent);
+}
+.segment.est-actif span {
+  color: rgba(11, 11, 10, 0.6);
+}
+.recherche--pleine {
+  margin-top: 12px;
+  max-width: none;
+}
+.index {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.index a {
+  display: grid;
+  grid-template-columns: 52px 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--filet);
+  text-decoration: none;
+}
+.index__image {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--carte);
+  color: var(--discret);
+  font-family: var(--serif);
+  font-size: 22px;
+}
+.index__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.index__nom {
+  font-size: 16px;
+  font-weight: 500;
+}
+.index__n {
+  color: var(--discret);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.index__fleche {
+  color: var(--discret);
+  font-size: 22px;
+}
+
+/* ---------- Suggestions de recherche ---------- */
+.suggestions {
+  margin-top: 20px;
+}
+.suggestions__titre {
+  margin: 18px 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.suggestions__liste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.suggestions .pastille-filtre {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  text-decoration: none;
+}
+
+/* Chargement du reste du catalogue : fin trait animé sous la barre du haut */
+.chargement-suite::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent) no-repeat;
+  background-size: 40% 100%;
+  animation: balayage 1.2s ease-in-out infinite;
+}
+
+/* ---------- Téléphone et tablette : navigation par onglets ---------- */
+@media (max-width: 999px) {
+  body {
+    padding-bottom: calc(var(--hauteur-onglets) + env(safe-area-inset-bottom));
+  }
+  /* Le menu et les icônes du haut sont remplacés par les onglets du bas */
+  #ouvrir-menu,
+  .barre__actions {
+    display: none;
+  }
+  .barre {
+    grid-template-columns: 1fr;
+  }
+  .pied {
+    padding-bottom: 24px;
+  }
 }
 
 /* ---------- Animations ---------- */
@@ -1005,9 +1238,6 @@ dialog {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
   }
-  .fiche__actions {
-    grid-template-columns: 1fr auto;
-  }
   .pastilles {
     flex-wrap: wrap;
     margin: 14px 0 0;
@@ -1018,6 +1248,18 @@ dialog {
 
 /* ---------- Ordinateur ---------- */
 @media (min-width: 1000px) {
+  .onglets {
+    display: none;
+  }
+  .toast {
+    bottom: 24px;
+  }
+  .fiche__actions {
+    position: static;
+    margin: 22px 0 0;
+    padding: 0;
+    background: none;
+  }
   .hero {
     padding-top: 56px;
   }

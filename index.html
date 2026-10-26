@@ -3,13 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Catalogue</title>
+  <title>Artillery Cop</title>
   <meta name="description" content="Catalogue en images : parcourez les articles et composez votre sélection.">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#0b0b0a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Artillery Cop">
+  <link rel="icon" href="images/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&family=Inter:wght@300;400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,7 +25,7 @@
       <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
     </button>
     <a class="barre__marque" href="#/" id="barre-marque">
-      <img id="logo" alt="" hidden>
+      <img id="logo" alt="" width="26" height="27" hidden>
       <span id="barre-titre">Catalogue</span>
     </a>
     <div class="barre__actions">
@@ -46,6 +50,8 @@
     <ul class="menu__liens">
       <li><a href="#/">Accueil</a></li>
       <li><a href="#/selection">Ma sélection</a></li>
+      <li><a href="#/explorer">Explorer</a></li>
+      <li><a href="#/nouveautes">Nouveautés</a></li>
       <li><a href="#/tout">Tout le catalogue</a></li>
     </ul>
     <p class="menu__groupe">Catégories</p>
@@ -79,6 +85,29 @@
     </div>
     <div class="fiche__infos" id="fiche-infos"></div>
   </dialog>
+
+  <!-- Barre d'onglets en bas de l'écran (téléphone) -->
+  <nav class="onglets" aria-label="Navigation principale">
+    <a href="#/" data-onglet="accueil">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><path d="M4 10.5L12 4l8 6.5V20h-5.5v-5.5h-5V20H4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span>Accueil</span>
+    </a>
+    <a href="#/explorer" data-onglet="explorer">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><path d="M4.5 4.5h6v6h-6zM13.5 4.5h6v6h-6zM4.5 13.5h6v6h-6zM13.5 13.5h6v6h-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span>Explorer</span>
+    </a>
+    <a href="#/recherche" data-onglet="recherche">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>Recherche</span>
+    </a>
+    <a href="#/selection" data-onglet="selection" id="onglet-selection" aria-label="Sélection, 0 article">
+      <span class="onglets__icone">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.6 4.5 7.1 4.5c2 0 3.6 1.1 4.9 2.8 1.3-1.7 2.9-2.8 4.9-2.8 3.5 0 5.7 3.5 4.4 6.8-1.8 4.6-9.3 9.2-9.3 9.2z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        <span class="pastille" id="compteur-onglet" hidden>0</span>
+      </span>
+      <span>Sélection</span>
+    </a>
+  </nav>
 
   <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
 

@@ -533,7 +533,63 @@
     });
   }
 
+  /**
+   * Catalogue JSON au format « albums + photos » :
+   *   { prefix, categories: [{ id, n, tp }], products: [{ a, p, s, u, o, ft, fc, cl, br }] }
+   * Chaque album (marque ou modèle) devient le titre ; ft le type d'article.
+   * Les prix éventuels du fichier sont volontairement ignorés.
+   */
+  const TYPES_ALBUM = {
+    Chaussure: "Chaussures", Sac: "Sacs", Veste: "Vestes", Bijou: "Bijoux", Electronique: "Électronique",
+    Casquette: "Casquettes", Ceinture: "Ceintures", "Écharpe": "Écharpes", Valise: "Valises", Jouet: "Jouets", Outfit: "Outfits",
+  };
+  function lireCatalogueJSON(json, source) {
+    const prefixe = json.prefix || "";
+    const albums = new Map((json.categories || []).map((c) => [c.id, c]));
+    const parAlbum = new Map();
+    for (const p of json.products || []) parAlbum.set(p.a, (parAlbum.get(p.a) || 0) + 1);
+    const articles = [];
+    for (const p of json.products || []) {
+      const album = albums.get(p.a);
+      if (!album || !p.p || !p.s) continue;
+      const nom = String(album.n || "").trim();
+      const estOutfit = album.tp === "Outfit" || /outfit/i.test(nom);
+      const type = estOutfit ? "Outfits" : p.ft || TYPES_ALBUM[album.tp] || "";
+      // Album multi-produits (« Acne Studio ») : on précise le type ; album de modèle (« Dior B30 ») : son nom suffit
+      const titre = estOutfit
+        ? `Outfit ${(parAlbum.get(p.a) || 0) - (p.o || 0)}`
+        : album.tp === "Multi" || !album.tp
+          ? [nom, p.ft].filter(Boolean).join(" · ")
+          : nom;
+      const couleur = p.cl || p.fc || "";
+      const base = urlSure(prefixe + p.p + "_" + p.s);
+      articles.push({
+        source,
+        id: "h" + p.p,
+        titre,
+        sousTitre: couleur,
+        description: "",
+        categories: type ? [type] : [],
+        tags: [],
+        image: base ? base + "_w.jpg" : "", // 400 px pour les grilles
+        imageHD: base ? base + "_c.jpg" : "", // 800 px pour la fiche
+        date: +p.u > 0 ? new Date(+p.u * 1000) : null,
+        extras: [], // la couleur est déjà affichée sous le titre
+        marquesForcees: p.br ? [p.br] : [],
+        album: nom,
+        outfit: estOutfit,
+        sources: [source],
+      });
+    }
+    return articles;
+  }
+
   async function chargerSource(src) {
+    if (src.format === "catalogue-json") {
+      const r = await fetch(src.url, { cache: "no-cache" });
+      if (!r.ok) throw new Error(`${src.nom} : HTTP ${r.status}`);
+      return { articles: lireCatalogueJSON(await r.json(), src), mode: "en direct" };
+    }
     const format = src.format || (/format=xlsx|\.xlsx(\?|$)/i.test(src.url || "") ? "xlsx" : "csv");
     if (src.url) {
       try {
@@ -561,6 +617,7 @@
     const diagnostic = [];
     const infos = [];
     let tous = [];
+    let dejaPrets = [];
     const resultats = await Promise.allSettled(sources.map(chargerSource));
     resultats.forEach((res, k) => {
       const src = sources[k];
@@ -570,9 +627,10 @@
         return;
       }
       infos.push(`${src.nom} : ${res.value.mode}`);
-      tous = tous.concat(analyserGrille(res.value.grille, src, diagnostic));
+      if (res.value.articles) dejaPrets = dejaPrets.concat(res.value.articles); // catalogue JSON : identifiants déjà uniques
+      else tous = tous.concat(analyserGrille(res.value.grille, src, diagnostic));
     });
-    return { articles: dedoublonner(tous, diagnostic), infos, diagnostic };
+    return { articles: dedoublonner(tous, diagnostic).concat(dejaPrets), infos, diagnostic };
   }
 
   window.Donnees = { charger, normaliser, echapper, urlSure, antiRebond };

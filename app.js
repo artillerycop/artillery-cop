@@ -14,6 +14,7 @@
  *   #/                 accueil
  *   #/c/<categorie>    une catégorie        #/m/<marque>   une marque
  *   #/tout             tout le catalogue    #/recherche?q= une recherche
+ *   #/nouveautes       derniers ajouts      #/explorer?t=marques|categories  index A–Z
  *   #/selection        ma sélection         #/selection?ids=a,b  sélection partagée
  *   …?a=<id>           ajoute la fiche d'un article par-dessus la page
  */
@@ -60,18 +61,46 @@
     if (!g.articles.includes(a)) g.articles.push(a);
   }
 
+  // Marques : on cherche leurs mots-clés dans le nom de chaque article.
+  // Beaucoup de titres se répètent (albums de la collection) : résultat mis en cache.
+  let reglesMarques = null;
+  const cacheMarques = new Map();
+  function detecterMarques(texte) {
+    if (cacheMarques.has(texte)) return cacheMarques.get(texte);
+    if (!reglesMarques) {
+      reglesMarques = (CFG.marques || []).map(([nom, ...mots]) => ({
+        nom,
+        re: new RegExp("(^|[^a-z0-9])(" + mots.map((m) => echapperRegex(normaliser(m))).join("|") + ")(?=[^a-z0-9]|$)"),
+      }));
+    }
+    const trouvees = reglesMarques.filter((r) => r.re.test(texte)).map((r) => r.nom);
+    cacheMarques.set(texte, trouvees);
+    return trouvees;
+  }
+
+  let nouveautes = []; // articles datés des derniers jours, du plus récent au plus ancien
+  let outfits = []; // tenues complètes (album « Outfits »)
+
+  /** (Ré)indexe tout le catalogue : au démarrage, puis quand la collection arrive. */
   function indexer() {
-    // Marques : on cherche leurs mots-clés dans le nom de chaque article
-    const regles = (CFG.marques || []).map(([nom, ...mots]) => ({
-      nom,
-      re: new RegExp("(^|[^a-z0-9])(" + mots.map((m) => echapperRegex(normaliser(m))).join("|") + ")(?=[^a-z0-9]|$)"),
-    }));
+    parId.clear();
+    categories.clear();
+    marques.clear();
+    articles.forEach((a) => {
+      const titre = normaliser(a.titre + " " + a.sousTitre);
+      // Marque fournie par la source (ramenée au nom de config.js si on le reconnaît), sinon détectée
+      const fournies = (a.marquesForcees || []).map((m) => detecterMarques(normaliser(m))[0] || m);
+      a.marques = [...new Set([...fournies, ...detecterMarques(normaliser(a.album || titre))])];
+      a.clesCat = a.categories.map(slug);
+      a.clesMarque = a.marques.map(slug);
+    });
+    // Catégories et marques retirées du site (config.js) : leurs articles disparaissent aussi
+    const exCat = new Set((CFG.exclureCategories || []).map(slug));
+    const exMarque = new Set((CFG.exclureMarques || []).map(slug));
+    articles = articles.filter((a) => !a.clesCat.some((k) => exCat.has(k)) && !a.clesMarque.some((k) => exMarque.has(k)));
     articles.forEach((a, i) => {
       a.ordre = i;
       const titre = normaliser(a.titre + " " + a.sousTitre);
-      a.marques = regles.filter((r) => r.re.test(titre)).map((r) => r.nom);
-      a.clesCat = a.categories.map(slug);
-      a.clesMarque = a.marques.map(slug);
       a.cleTitre = titre;
       a.recherche = normaliser([a.titre, a.sousTitre, a.description, ...a.categories, ...a.tags, ...a.marques, ...a.extras.map((x) => x.texte)].join(" "));
       a.categories.forEach((c) => ajouterAuGroupe(categories, c, a));
@@ -81,6 +110,12 @@
     // Les marques trop rares n'ont pas leur page
     const min = CFG.minArticlesMarque || 1;
     for (const [cle, g] of marques) if (g.articles.length < min) marques.delete(cle);
+
+    const dates = articles.filter((a) => a.date && !a.outfit);
+    const plusRecente = dates.reduce((max, a) => Math.max(max, +a.date), 0);
+    const limite = plusRecente - (CFG.joursNouveautes || 21) * 86400000;
+    nouveautes = dates.filter((a) => +a.date >= limite && a.image).sort((a, b) => b.date - a.date || a.ordre - b.ordre);
+    outfits = articles.filter((a) => a.outfit && a.image);
   }
 
   /** Image représentative d'un groupe : le premier article illustré. */
@@ -162,6 +197,10 @@
     pastille.textContent = n;
     pastille.hidden = n === 0;
     $("#lien-selection").setAttribute("aria-label", `Ma sélection, ${n} article${n > 1 ? "s" : ""}`);
+    const badge = $("#compteur-onglet");
+    badge.textContent = n;
+    badge.hidden = n === 0;
+    $("#onglet-selection").setAttribute("aria-label", `Sélection, ${n} article${n > 1 ? "s" : ""}`);
   }
 
   const lienPartage = (ids) => location.href.split("#")[0].split("?")[0] + "#/selection?ids=" + ids.join(",");
@@ -256,9 +295,10 @@
 
   const initiale = (t) => echapper((String(t).match(/[A-Za-z0-9À-ÿ]/) || ["·"])[0].toUpperCase());
 
-  function image(a, classe, eager) {
-    return a.image
-      ? `<img class="${classe}" src="${echapper(a.image)}" alt="${echapper(a.titre)}" ${eager ? "" : 'loading="lazy"'} decoding="async" referrerpolicy="no-referrer">`
+  function image(a, classe, eager, hd) {
+    const src = hd && a.imageHD ? a.imageHD : a.image;
+    return src
+      ? `<img class="${classe}" src="${echapper(src)}" alt="${echapper(a.titre)}" ${eager ? "" : 'loading="lazy"'} decoding="async" referrerpolicy="no-referrer">`
       : `<span class="${classe} sans-image" aria-hidden="true">${initiale(a.titre)}</span>`;
   }
 
@@ -304,7 +344,7 @@
     </a></li>`;
   }
 
-  function rangee(titre, lien, total, liste, contexte) {
+  function rangee(titre, lien, total, liste, contexte, haute) {
     if (!liste.length) return "";
     listes[contexte] = liste;
     return `<section class="rangee" aria-labelledby="titre-${contexte}">
@@ -312,7 +352,7 @@
         <h2 class="titre-section" id="titre-${contexte}">${titre}</h2>
         ${lien ? `<a class="voir-tout" href="${lien}">Voir tout (${total}) <span aria-hidden="true">→</span></a>` : ""}
       </div>
-      <ul class="carrousel">${liste.map((a) => vignette(a, contexte)).join("")}</ul>
+      <ul class="carrousel${haute ? " carrousel--haut" : ""}">${liste.map((a) => vignette(a, contexte)).join("")}</ul>
     </section>`;
   }
 
@@ -330,10 +370,12 @@
     // Les listes de navigation ne valent que pour la page affichée
     for (const nom of Object.keys(listes)) delete listes[nom];
     if (vue === "") titreDoc = pageAccueil();
-    else if (vue === "c" || vue === "m" || vue === "tout" || vue === "recherche") titreDoc = pageListe(r);
+    else if (["c", "m", "tout", "recherche", "nouveautes"].includes(vue)) titreDoc = pageListe(r);
+    else if (vue === "explorer") titreDoc = pageExplorer(r);
     else if (vue === "selection") titreDoc = pageSelection(r);
     else titreDoc = pageIntrouvable();
-    document.title = [titreDoc, `${CFG.titre || ""} ${CFG.titreAccent || ""}`.trim()].filter(Boolean).join(" — ");
+    document.title = [titreDoc, CFG.titre || "Catalogue"].filter(Boolean).join(" — ");
+    majOnglets(vue);
 
     // Retour arrière : on retrouve la position ; nouvelle page : on remonte en haut
     const memo = restaurer && defilements.get(clePageCourante);
@@ -346,27 +388,66 @@
   function pageAccueil() {
     const tous = articles.filter((a) => a.image);
     const une = categories.get(slug(CFG.aLaUne || "")) || null;
-    const listeUne = une ? une.articles.filter((a) => a.image) : tous;
-    const decouvertes = melangeDuJour(tous.filter((a) => !listeUne.slice(0, 24).includes(a))).slice(0, 24);
+    const listeUne = une ? une.articles.filter((a) => a.image) : [];
+    const decouvertes = melangeDuJour(tous.filter((a) => !a.outfit && !listeUne.slice(0, 24).includes(a))).slice(0, 24);
     const parTaille = (a, b) => b.articles.length - a.articles.length || collator.compare(a.nom, b.nom);
+    const n = CFG.cartesAccueil || 12;
     const groupesMarques = [...marques.values()].sort(parTaille);
-    const groupesCats = [...categories.values()].filter((g) => !une || g.cle !== une.cle).sort((a, b) => collator.compare(a.nom, b.nom));
+    const groupesCats = [...categories.values()].filter((g) => (!une || g.cle !== une.cle) && g.cle !== "outfit").sort(parTaille);
+    const lienExplorer = (t, total) => `<a class="voir-tout" href="#/explorer?t=${t}">Tout voir (${total}) <span aria-hidden="true">→</span></a>`;
 
     page.innerHTML = `
       <section class="hero">
-        <h1 class="hero__titre">${echapper(CFG.titre || "")} <em>${echapper(CFG.titreAccent || "")}</em></h1>
+        ${CFG.logo ? `<img class="hero__logo" src="${echapper(urlSure(CFG.logo))}" alt="" width="120" height="126">` : ""}
+        <h1 class="hero__titre">${echapper(CFG.titre || "Catalogue")}</h1>
         ${CFG.sousTitre ? `<p class="hero__sous">${echapper(CFG.sousTitre)}</p>` : ""}
         <form class="recherche" role="search" data-recherche>
           <label class="visuellement-cache" for="recherche-accueil">Rechercher</label>
           <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          <input id="recherche-accueil" name="q" type="search" placeholder="Rechercher parmi ${articles.length.toLocaleString("fr-FR")} articles" autocomplete="off">
+          <input id="recherche-accueil" name="q" type="search" enterkeyhint="search" placeholder="Rechercher parmi ${articles.length.toLocaleString("fr-FR")} articles" autocomplete="off">
         </form>
       </section>
-      ${rangee("À la une", une ? `#/c/${une.cle}` : "#/tout", une ? une.articles.length : articles.length, listeUne.slice(0, 24), "une")}
+      ${outfits.length ? rangee("Outfits · Inspiration", "#/c/outfit", outfits.length, outfits.slice(0, 20), "outfits", true) : ""}
+      ${rangee("Nouveautés", "#/nouveautes", nouveautes.length, nouveautes.slice(0, 24), "nouveautes")}
+      ${rangee("À la une", une ? `#/c/${une.cle}` : "", une ? une.articles.length : 0, listeUne.slice(0, 24), "une")}
       ${rangee("Découvertes du jour", "#/tout", articles.length, decouvertes, "decouvertes")}
-      ${groupesMarques.length ? `<section class="bloc" aria-labelledby="titre-marques"><h2 class="titre-section" id="titre-marques">Marques</h2><ul class="mosaique">${groupesMarques.map((g) => carteGroupe(g, "m")).join("")}</ul></section>` : ""}
-      <section class="bloc" aria-labelledby="titre-categories"><h2 class="titre-section" id="titre-categories">Catégories</h2><ul class="mosaique mosaique--categories">${groupesCats.map((g) => carteGroupe(g, "c")).join("")}</ul></section>`;
+      ${
+        groupesMarques.length
+          ? `<section class="bloc" aria-labelledby="titre-marques"><div class="rangee__entete"><h2 class="titre-section" id="titre-marques">Marques</h2>${lienExplorer("marques", groupesMarques.length)}</div>
+             <ul class="mosaique">${groupesMarques.slice(0, n).map((g) => carteGroupe(g, "m")).join("")}</ul></section>`
+          : ""
+      }
+      <section class="bloc" aria-labelledby="titre-categories"><div class="rangee__entete"><h2 class="titre-section" id="titre-categories">Catégories</h2>${lienExplorer("categories", groupesCats.length)}</div>
+        <ul class="mosaique mosaique--categories">${groupesCats.slice(0, n).map((g) => carteGroupe(g, "c")).join("")}</ul></section>`;
     return "";
+  }
+
+  /** Index A–Z des marques et des catégories : la navigation principale sur téléphone. */
+  function pageExplorer(r) {
+    const t = r.p.get("t") === "categories" ? "categories" : "marques";
+    const groupes = [...(t === "marques" ? marques : categories).values()].sort((a, b) => collator.compare(a.nom, b.nom));
+    const prefixe = t === "marques" ? "m" : "c";
+    page.innerHTML = `
+      <div class="entete-liste"><div><h1 class="entete-liste__titre">Explorer</h1></div></div>
+      <div class="segments" role="tablist" aria-label="Type de liste">
+        <a role="tab" href="#/explorer?t=marques" aria-selected="${t === "marques"}" class="segment${t === "marques" ? " est-actif" : ""}">Marques <span>${marques.size}</span></a>
+        <a role="tab" href="#/explorer?t=categories" aria-selected="${t === "categories"}" class="segment${t === "categories" ? " est-actif" : ""}">Catégories <span>${categories.size}</span></a>
+      </div>
+      <form class="recherche recherche--compacte recherche--pleine" role="search" data-filtre>
+        <label class="visuellement-cache" for="filtre-index">Filtrer la liste</label>
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input id="filtre-index" type="search" placeholder="${t === "marques" ? "Une marque…" : "Une catégorie…"}" autocomplete="off">
+      </form>
+      <ul class="index" id="index">${groupes
+        .map((g) => {
+          const img = couverture(g.articles);
+          return `<li data-nom="${echapper(normaliser(g.nom))}"><a href="#/${prefixe}/${g.cle}">
+            <span class="index__image">${img ? `<img src="${echapper(img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : initiale(g.nom)}</span>
+            <span class="index__nom">${echapper(g.nom)}</span><span class="index__n">${g.articles.length}</span>
+            <span class="index__fleche" aria-hidden="true">›</span></a></li>`;
+        })
+        .join("")}</ul>`;
+    return "Explorer";
   }
 
   /** Liste d'articles : catégorie, marque, tout le catalogue ou recherche. */
@@ -385,6 +466,10 @@
       facettes = vue === "c" ? marques : categories;
       prefixeFacette = vue === "c" ? "m" : "c";
     } else if (vue === "recherche") titre = "Recherche";
+    else if (vue === "nouveautes") {
+      titre = "Nouveautés";
+      base = nouveautes;
+    }
 
     // Pastilles : les catégories (ou marques) présentes dans cette liste
     const compte = new Map();
@@ -423,6 +508,16 @@
       </div>`
           : ""
       }
+      ${
+        vue === "recherche"
+          ? `<div class="suggestions" id="suggestions" hidden>
+        <p class="suggestions__titre">Marques populaires</p>
+        <div class="suggestions__liste">${[...marques.values()].sort((a, b) => b.articles.length - a.articles.length).slice(0, 16).map((g) => `<a class="pastille-filtre" href="#/m/${g.cle}">${echapper(g.nom)}</a>`).join("")}</div>
+        <p class="suggestions__titre">Catégories</p>
+        <div class="suggestions__liste">${[...categories.values()].sort((a, b) => b.articles.length - a.articles.length).slice(0, 16).map((g) => `<a class="pastille-filtre" href="#/c/${g.cle}">${echapper(g.nom)}</a>`).join("")}</div>
+      </div>`
+          : ""
+      }
       <ul class="grille" id="grille"></ul>
       <div class="vide" id="vide" hidden>
         <p class="vide__titre">Aucun résultat</p>
@@ -457,14 +552,20 @@
       const score = (a) => (a.cleTitre.startsWith(q) ? 0 : a.cleTitre.includes(q) ? 1 : 2);
       res = res.slice().sort((a, b) => score(a) - score(b) || a.ordre - b.ordre);
     }
+    // Page de recherche vide : on propose des marques et catégories plutôt que tout le catalogue
+    const suggestions = $("#suggestions");
+    if (suggestions) {
+      suggestions.hidden = !!q;
+      if (!q) res = [];
+    }
     etatListe.resultats = res;
     etatListe.affiches = 0;
     listes.liste = res;
     $("#grille").innerHTML = "";
     afficherSuite();
 
-    $("#compte").textContent = `${res.length.toLocaleString("fr-FR")} article${res.length > 1 ? "s" : ""}`;
-    $("#vide").hidden = res.length > 0;
+    $("#compte").textContent = suggestions && !q ? "" : `${res.length.toLocaleString("fr-FR")} article${res.length > 1 ? "s" : ""}`;
+    $("#vide").hidden = res.length > 0 || (suggestions && !q);
     if (!res.length) $("#vide-texte").textContent = q ? `Rien ne correspond à « ${r.p.get("q")} ».` : "Aucun article dans cette sélection de filtres.";
     document.querySelectorAll("[data-facette]").forEach((b) => {
       const actif = b.dataset.facette === f;
@@ -563,7 +664,7 @@
   /** Liste dans laquelle on navigue avec ← → : celle d'où l'on vient, sinon la catégorie. */
   function listeDeNavigation(id, contexte) {
     if (contexte && listes[contexte] && listes[contexte].some((a) => a.id === id)) return listes[contexte];
-    for (const nom of ["liste", "selection", "une", "decouvertes"]) if (listes[nom] && listes[nom].some((a) => a.id === id)) return listes[nom];
+    for (const nom of ["liste", "selection", "outfits", "nouveautes", "une", "decouvertes"]) if (listes[nom] && listes[nom].some((a) => a.id === id)) return listes[nom];
     const a = parId.get(id);
     return (a.clesCat[0] && categories.get(a.clesCat[0])?.articles) || [a];
   }
@@ -591,7 +692,7 @@
     const sim = similaires(a);
     listes.similaires = sim;
 
-    fiche.cadre.innerHTML = image(a, "fiche__image", true);
+    fiche.cadre.innerHTML = image(a, "fiche__image", true, true);
     fiche.cadre.classList.remove("est-zoome");
     $("#fiche-position").textContent = fiche.liste.length > 1 ? `${fiche.i + 1} / ${fiche.liste.length}` : "";
     $("#fiche-prec").hidden = $("#fiche-suiv").hidden = fiche.liste.length < 2;
@@ -721,6 +822,15 @@
     $("#menu-marques").innerHTML = [...marques.values()].sort((a, b) => collator.compare(a.nom, b.nom)).map((g) => lien(g, "m")).join("");
   }
 
+  /** Met en avant l'onglet de la page courante (barre du bas sur téléphone). */
+  function majOnglets(vue) {
+    const actif = vue === "" ? "accueil" : vue === "explorer" || vue === "c" || vue === "m" || vue === "tout" || vue === "nouveautes" ? "explorer" : vue === "recherche" ? "recherche" : vue === "selection" ? "selection" : "";
+    document.querySelectorAll("[data-onglet]").forEach((o) => {
+      if (o.dataset.onglet === actif) o.setAttribute("aria-current", "page");
+      else o.removeAttribute("aria-current");
+    });
+  }
+
   let minuterieToast;
   function notifier(message) {
     const t = $("#toast");
@@ -822,6 +932,10 @@
   }, 140);
   document.addEventListener("input", (e) => {
     if (e.target.id === "filtre-texte") filtrerTexte(e.target.value);
+    if (e.target.id === "filtre-index") {
+      const q = normaliser(e.target.value);
+      document.querySelectorAll("#index li").forEach((li) => (li.hidden = !!q && !li.dataset.nom.includes(q)));
+    }
   });
   document.addEventListener("change", (e) => {
     if (e.target.id !== "tri") return;
@@ -854,22 +968,44 @@
   window.addEventListener("popstate", surRoute);
   window.addEventListener("hashchange", surRoute);
 
+  /** Après l'arrivée de nouveaux articles : on redessine la page sans perdre sa place. */
+  function rafraichir() {
+    indexer();
+    remplirMenu();
+    majCompteur();
+    const r = route();
+    const champ = document.activeElement && document.activeElement.matches("input") ? document.activeElement : null;
+    if (champ && champ.id === "filtre-texte") {
+      // L'utilisateur tape dans une liste : on garde le champ, on met juste la liste à jour
+      const [vue, cle] = r.seg;
+      etatListe.base = vue === "c" ? categories.get(cle)?.articles || [] : vue === "m" ? marques.get(cle)?.articles || [] : vue === "nouveautes" ? nouveautes : articles;
+      majListe();
+    } else if (!champ) {
+      const y = scrollY;
+      rendrePage(r, false);
+      requestAnimationFrame(() => scrollTo(0, y));
+    }
+    const id = r.p.get("a");
+    if (id && parId.has(id) && !fiche.el.open) ouvrirFiche(id);
+  }
+
   async function demarrer() {
-    // Identité
-    $("#barre-titre").textContent = `${CFG.titre || ""} ${CFG.titreAccent || ""}`.trim() || "Catalogue";
+    // Identité : logo dans la barre, nom en texte pour les lecteurs d'écran
+    $("#barre-titre").textContent = CFG.titre || "Catalogue";
     if (CFG.logo) {
       const logo = $("#logo");
       logo.src = urlSure(CFG.logo);
-      logo.alt = $("#barre-titre").textContent;
       logo.hidden = false;
-      $("#barre-titre").classList.add("visuellement-cache");
     }
     if (CFG.accent) document.documentElement.style.setProperty("--accent", CFG.accent);
-    $("#pied-texte").textContent = `${$("#barre-titre").textContent} — catalogue en images. Données issues de Google Sheets.`;
+    $("#pied-texte").textContent = `${CFG.titre || "Catalogue"} — catalogue en images.`;
 
     const demo = CFG.exemple || new URLSearchParams(location.search).get("demo") === "1";
     const sources = demo ? [{ id: "exemple", nom: "Exemple", copie: "exemple" }] : CFG.sources || [];
-    const charge = await window.Donnees.charger(sources);
+    const immediates = sources.filter((s) => !s.arrierePlan);
+    const differees = sources.filter((s) => s.arrierePlan);
+
+    const charge = await window.Donnees.charger(immediates);
     articles = charge.articles;
     console.groupCollapsed(`[catalogue] ${articles.length} articles — ${charge.infos.join(" · ")}`);
     charge.diagnostic.forEach((d) => console.info(d));
@@ -878,11 +1014,29 @@
     indexer();
     remplirMenu();
     majCompteur();
-    if (!articles.length) {
-      page.innerHTML = `<div class="vide"><p class="vide__titre">Catalogue indisponible</p><p class="vide__texte">Les tableurs n'ont pas pu être chargés. Vérifiez config.js et la console du navigateur.</p></div>`;
-      return;
+    if (articles.length || !differees.length) {
+      if (!articles.length) {
+        page.innerHTML = `<div class="vide"><p class="vide__titre">Catalogue indisponible</p><p class="vide__texte">Les données n'ont pas pu être chargées. Vérifiez config.js et la console du navigateur.</p></div>`;
+        return;
+      }
+      surRoute();
     }
-    surRoute();
+
+    // Gros catalogue : chargé ensuite, sans bloquer le premier affichage
+    if (differees.length) {
+      document.body.classList.add("chargement-suite");
+      const suite = await window.Donnees.charger(differees);
+      document.body.classList.remove("chargement-suite");
+      console.info(`[catalogue] +${suite.articles.length} articles — ${suite.infos.join(" · ")}`);
+      if (!suite.articles.length) return;
+      articles = articles.concat(suite.articles);
+      if (dernierHash === null) {
+        indexer();
+        remplirMenu();
+        majCompteur();
+        surRoute();
+      } else rafraichir();
+    }
   }
 
   demarrer();

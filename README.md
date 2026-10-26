@@ -1,8 +1,8 @@
-# Spreadsheet Catalogue — v2 « lookbook »
+# Artillery Cop — catalogue « lookbook »
 
 Cette nouvelle version du catalogue est **uniquement en images**. Elle n'affiche ni prix, ni photos QC, ni liens d'achat. On parcourt les articles, on ajoute au **cœur** ceux que l'on veut acheter, puis on **partage sa sélection** : par lien, ou en copiant la liste.
 
-Elle reprend la lecture des tableurs de la v1. Le design s'inspire des catalogues de type lookbook : fond sombre, carrousels, grandes cartes de marques et fiche en plein écran.
+Elle reprend la lecture des tableurs de la v1 et ajoute un grand catalogue JSON (environ 44 000 articles, chargé en arrière-plan pour que le site s'ouvre vite). Le design s'inspire des catalogues de type lookbook : fond sombre, carrousels, grandes cartes de marques et fiche en plein écran. L'identité reprend le monogramme « AC » (`images/logo.svg`, redessiné en vectoriel) et des titres en capitales condensées.
 
 ```
 index.html   structure de la page
@@ -17,8 +17,12 @@ outils/preparer_tableur.py   mise à jour des copies locales
 
 ## Ce que l'on trouve sur le site
 
+- **Sur téléphone** : une barre d'onglets en bas de l'écran (Accueil, Explorer, Recherche, Sélection). Dans les listes, la recherche reste visible en faisant défiler. Dans une fiche, le bouton « Ajouter à ma sélection » reste à portée du pouce.
+- **Explorer** : l'index A–Z de toutes les marques et catégories, avec un filtre.
+
 - **Accueil** :
   - le titre et une barre de recherche ;
+  - « Outfits · Inspiration » et « Nouveautés » (les 7 derniers jours, réglable avec `joursNouveautes`) ;
   - le carrousel « À la une » (la section `TOP PICK` du tableur) ;
   - les « Découvertes du jour » (un tirage qui change chaque jour) ;
   - les cartes **Marques** et **Catégories**.
@@ -63,12 +67,16 @@ Le fonctionnement est le même que pour la v1 :
 
 - Pour mettre en ligne, déposez le dossier sur Netlify, GitHub Pages ou OVH, sans `outils/.cache`. Le fichier `netlify.toml` est déjà prêt.
 
+## Retirer des catégories ou des marques
+
+Dans `config.js`, `exclureCategories` et `exclureMarques` retirent du site des catégories ou des marques, avec tous leurs articles. Actuellement : Building Blocks, Electronic, Perfume, Watch Box, Room Decor, Other, Électronique, Jouets, ainsi que les marques Apple et Kaws.
+
 ## Personnaliser
 
 Dans `config.js` :
 
-- `titre` et `titreAccent`, ce dernier en italique coloré ;
-- `sousTitre`, `logo`, `accent` ;
+- `titre`, `sousTitre`, `logo`, `accent` ;
+- `cartesAccueil` : nombre de cartes de marques et de catégories sur l'accueil ;
 - `aLaUne` : la section mise en avant ;
 - `minArticlesMarque` ;
 - la liste `marques`.

@@ -4,22 +4,21 @@
  */
 window.CONFIG = {
   /* ---------- Identité ---------- */
-  // Le titre d'accueil s'écrit en deux temps : « titre » puis « titreAccent » en italique coloré.
-  titre: "Spreadsheet",
-  titreAccent: "Catalogue",
+  titre: "Artillery Cop",
   sousTitre: "Parcourez, choisissez, partagez votre sélection.",
-  // Logo : chemin ou URL d'une image (ex. "images/logo.svg"). Vide = titre en texte.
-  logo: "",
-  // Couleur d'accent (champagne). Elle doit rester lisible sur fond sombre.
-  accent: "#c9a96e",
+  // Logo : image claire, affichée sur fond sombre (barre du haut et accueil).
+  logo: "images/logo.svg",
+  // Couleur d'accent. Le logo est noir et blanc : l'accent reste blanc cassé.
+  accent: "#f3f0ea",
 
   /* ---------- Sources de données ----------
    * Mêmes réglages que la v1 :
    *   id      identifiant court (sert aussi pour data/<id>.js)
    *   nom     libellé de la source
    *   url     (optionnel) lecture en direct (.xlsx Google Sheets ou CSV)
-   *   format  "xlsx" ou "csv"
+   *   format  "xlsx", "csv", ou "catalogue-json" (albums + photos, voir donnees.js)
    *   copie   copie locale data/<copie>.js (outils/preparer_tableur.py)
+   *   arrierePlan  true = chargé après le premier affichage (gros catalogues)
    */
   sources: [
     {
@@ -30,6 +29,15 @@ window.CONFIG = {
       copie: "tableur2",
     },
     { id: "tableur1", nom: "Budget", copie: "tableur1" },
+    {
+      // Catalogue JSON (albums + photos) : ~44 000 articles, chargé en arrière-plan
+      // après l'affichage des tableurs pour que le site s'ouvre vite sur téléphone.
+      id: "collection",
+      nom: "Collection",
+      url: "https://www.homecopparis.com/data.min.json",
+      format: "catalogue-json",
+      arrierePlan: true,
+    },
   ],
 
   // Jeu de données d'exemple : mettre true, ou ouvrir index.html?demo=1
@@ -38,6 +46,17 @@ window.CONFIG = {
   /* ---------- Accueil ---------- */
   // Catégorie mise en avant dans le carrousel « À la une » (nom de section du tableur).
   aLaUne: "TOP PICK",
+  // Rangée « Nouveautés » : articles datés des N derniers jours du catalogue.
+  joursNouveautes: 7,
+  // Nombre de cartes de marques / catégories affichées sur l'accueil (le reste dans « Explorer »).
+  cartesAccueil: 12,
+  /* ---------- Retirés du site ----------
+   * Ces catégories et marques n'apparaissent pas, ni leurs articles.
+   * Les noms s'écrivent comme dans les données (majuscules et pluriels indifférents).
+   */
+  exclureCategories: ["BUILDING BLOCKS", "ELECTRONIC", "PERFUME", "WATCH BOX", "ROOM DECOR", "OTHER", "Électronique", "Jouets"],
+  exclureMarques: ["Apple", "Kaws"],
+
   // Nombre minimal d'articles pour qu'une marque ait sa carte.
   minArticlesMarque: 4,
 
@@ -71,7 +90,7 @@ window.CONFIG = {
     ["Denim Tears", "denim tears"],
     ["Rhude", "rhude"],
     ["Amiri", "amiri"],
-    ["Arc'teryx", "arcteryx", "arc'teryx", "arc teryx"],
+    ["Arc'teryx", "arcteryx", "arc'teryx", "arc’teryx", "arc teryx"],
     ["The North Face", "north face", "tnf"],
     ["Canada Goose", "canada goose"],
     ["Carhartt", "carhartt"],
@@ -95,6 +114,49 @@ window.CONFIG = {
     ["Loewe", "loewe"],
     ["Fendi", "fendi"],
     ["Apple", "airpods", "apple"],
+    ["Acne Studios", "acne"],
+    ["Aimé Leon Dore", "aime leon dore"],
+    ["Alo", "alo"],
+    ["AMI Paris", "ami paris"],
+    ["Alexander McQueen", "mcqueen"],
+    ["Aritzia", "aritzia"],
+    ["Asics", "asics"],
+    ["Birkenstock", "birkenstock"],
+    ["Bottega Veneta", "bottega"],
+    ["Broken Planet", "broken planet"],
+    ["Casablanca", "casablanca"],
+    ["Chanel", "chanel"],
+    ["Chloé", "chloe"],
+    ["CP Company", "cp company"],
+    ["Delvaux", "delvaux"],
+    ["Drôle de Monsieur", "drole de monsieur"],
+    ["Enfants Riches Déprimés", "enfants riches deprimes"],
+    ["Givenchy", "givenchy"],
+    ["Golden Goose", "golden goose"],
+    ["Jacquemus", "jacquemus"],
+    ["Lanvin", "lanvin"],
+    ["Loro Piana", "loro piana"],
+    ["Louboutin", "louboutin"],
+    ["Lululemon", "lulu lemon", "lululemon"],
+    ["Margiela", "margiela"],
+    ["Miu Miu", "miu miu", "miumiu"],
+    ["MontBell", "montbell"],
+    ["Montblanc", "montblanc"],
+    ["On", "on sneakers", "on x"],
+    ["Parajumpers", "parajumpers"],
+    ["Rick Owens", "rick owens"],
+    ["Rimowa", "rimowa"],
+    ["Saint Laurent", "saint laurent", "yves saint laurent", "ysl"],
+    ["Salomon", "salomon"],
+    ["Saucony", "saucony"],
+    ["The Row", "the row"],
+    ["Thom Browne", "thom browne"],
+    ["Timberland", "timberland"],
+    ["Valentino", "valentino"],
+    ["Vans", "vans"],
+    ["Versace", "versace"],
+    ["Zegna", "zegna"],
+    ["Zimmermann", "zimmermann"],
   ],
 
   parPage: 36, // nombre d'images chargées à la fois
