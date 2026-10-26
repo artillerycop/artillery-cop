@@ -129,7 +129,9 @@
     marques.clear();
     familles.clear();
     const aLaUne = normaliser(CFG.aLaUne || "");
+    const imagesRetirees = new Set(CFG.imagesRetirees || []);
     articles.forEach((a) => {
+      if (imagesRetirees.has(a.image) || imagesRetirees.has(a.imageHD)) a.image = a.imageHD = "";
       // Catégories d'origine gardées à part : le classement peut être refait (arrivée de la collection)
       if (!a.categoriesSource) a.categoriesSource = a.categories.slice();
       a.aLaUne = !!aLaUne && a.categoriesSource.some((c) => normaliser(c) === aLaUne);

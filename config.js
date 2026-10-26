@@ -104,6 +104,14 @@ window.CONFIG = {
     { nom: "Outfits", mots: [], sources: ["Outfits"] },
   ],
 
+  /* ---------- Photos retirées ----------
+   * Chemins ou URL d'images à ne plus afficher (l'article reste, sans photo).
+   * Utile car le script de préparation recrée les images à chaque mise à jour du tableur.
+   */
+  imagesRetirees: [
+    "images/tableur1/image973.jpg", // GOYARD POUCH : photo fournisseur avec filigrane
+  ],
+
   /* ---------- Marques retirées ----------
    * Ces marques n'apparaissent pas, ni leurs articles.
    */
