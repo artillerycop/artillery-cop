@@ -112,6 +112,14 @@ window.CONFIG = {
     "images/tableur1/image973.jpg", // GOYARD POUCH : photo fournisseur avec filigrane
   ],
 
+  /* ---------- Articles retirés ----------
+   * Noms d'articles à retirer du site, écrits comme dans le tableur
+   * (majuscules et accents indifférents ; seule la 1re ligne du nom compte).
+   */
+  articlesRetires: [
+    "GOYARD POUCH",
+  ],
+
   /* ---------- Marques retirées ----------
    * Ces marques n'apparaissent pas, ni leurs articles.
    */

@@ -149,7 +149,8 @@
     });
     // Catégories et marques retirées du site (config.js) : leurs articles disparaissent aussi
     const exMarque = new Set((CFG.exclureMarques || []).map(slug));
-    articles = articles.filter((a) => !a.retire && !a.clesMarque.some((k) => exMarque.has(k)));
+    const exArticles = new Set((CFG.articlesRetires || []).map(normaliser));
+    articles = articles.filter((a) => !a.retire && !a.clesMarque.some((k) => exMarque.has(k)) && !exArticles.has(normaliser(a.titre)));
     articles.forEach((a, i) => {
       a.ordre = i;
       const titre = normaliser(a.titre + " " + a.sousTitre);
