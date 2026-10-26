@@ -405,7 +405,8 @@
     const id = idChoisi || a.id;
     const c = idChoisi && a.coloris ? a.coloris.find((x) => x.id === idChoisi) : null;
     const n = a.coloris ? a.coloris.length : 0;
-    const sous = c ? c.couleur || a.sousTitre : a.sousTitre;
+    // Sous le nom : la couleur choisie ; pas de « N coloris », déjà sur le badge
+    const sous = c ? c.couleur || a.sousTitre : n > 1 ? "" : a.sousTitre;
     return `<li class="tuile">
       <a class="tuile__lien" href="${hrefFiche(id)}" data-fiche="${id}" data-contexte="${contexte}">
         <div class="tuile__media">${image(a, "tuile__image", false, false, c)}${n > 1 && !c ? `<span class="badge-coloris">${n} coloris</span>` : ""}</div>
@@ -419,7 +420,7 @@
   /** Vignette de carrousel (accueil, « Vous aimerez aussi »). */
   function vignette(a, contexte) {
     return `<li class="vignette">
-      <a href="${hrefFiche(a.id)}" data-fiche="${a.id}" data-contexte="${contexte}" aria-label="${echapper(a.titre)}">${image(a, "vignette__image")}</a>
+      <a href="${hrefFiche(a.id)}" data-fiche="${a.id}" data-contexte="${contexte}" aria-label="${echapper(a.titre)}">${image(a, "vignette__image")}${a.coloris && a.coloris.length > 1 ? `<span class="badge-coloris">${a.coloris.length} coloris</span>` : ""}</a>
       ${boutonCoeur(a)}
     </li>`;
   }
@@ -478,6 +479,7 @@
   function pageAccueil() {
     const tous = articles.filter((a) => a.image);
     const listeUne = articles.filter((a) => a.aLaUne && a.image);
+    const multiColoris = articles.filter((a) => a.image && a.coloris && a.coloris.length > 1);
     const decouvertes = melangeDuJour(tous.filter((a) => !a.outfit && !listeUne.slice(0, 24).includes(a))).slice(0, 24);
     const parTaille = (a, b) => b.articles.length - a.articles.length || collator.compare(a.nom, b.nom);
     const n = CFG.cartesAccueil || 12;
@@ -500,6 +502,7 @@
       ${outfits.length ? rangee("Outfits · Inspiration", "#/c/outfit", outfits.length, outfits.slice(0, 20), "outfits", true) : ""}
       ${rangee("Nouveautés", "#/nouveautes", nouveautes.length, nouveautes.slice(0, 24), "nouveautes")}
       ${rangee("À la une", "#/une", listeUne.length, listeUne.slice(0, 24), "une")}
+      ${rangee("Plusieurs coloris", "#/tout?col=1", multiColoris.length, melangeDuJour(multiColoris).slice(0, 24), "coloris")}
       ${rangee("Découvertes du jour", "#/tout", articles.length, decouvertes, "decouvertes")}
       ${
         groupesFamilles.length
@@ -589,6 +592,9 @@
       .sort((a, b) => b[1] - a[1])
       .slice(0, 24);
 
+    // Articles dont on a les photos de plusieurs coloris (pastille dédiée)
+    const nColoris = base.filter((a) => a.coloris && a.coloris.length > 1).length;
+
     page.innerHTML = `
       <div class="entete-liste">
         <a class="retour" href="#/" data-retour aria-label="Retour"><span aria-hidden="true">←</span></a>
@@ -608,12 +614,14 @@
           <option value="">Pertinence</option>
           <option value="az">Nom, A → Z</option>
           <option value="za">Nom, Z → A</option>
+          <option value="coloris">Coloris d'abord</option>
         </select>
       </div>
       ${
-        pastilles.length
+        pastilles.length || nColoris
           ? `<div class="pastilles" role="group" aria-label="Affiner par ${prefixeFacette === "c" ? "catégorie" : "marque"}">
         <button type="button" class="pastille-filtre" data-facette="" aria-pressed="false">Tout</button>
+        ${nColoris ? `<button type="button" class="pastille-filtre pastille-filtre--coloris" data-filtre-coloris aria-pressed="false">Plusieurs coloris <span>${nColoris.toLocaleString("fr-FR")}</span></button>` : ""}
         ${pastilles.map(([k, n]) => `<button type="button" class="pastille-filtre" data-facette="${k}" aria-pressed="false">${echapper(facettes.get(k).nom)} <span>${n}</span></button>`).join("")}
       </div>`
           : ""
@@ -652,11 +660,17 @@
     const q = normaliser(r.p.get("q") || "");
     const f = r.p.get("f") || "";
     const tri = r.p.get("tri") || "";
+    const avecColoris = r.p.get("col") === "1";
+    const nbColoris = (a) => (a.coloris ? a.coloris.length : 0);
     const jetons = q.split(" ").filter(Boolean);
     let res = etatListe.base.filter(
-      (a) => (!jetons.length || jetons.every((j) => a.recherche.includes(j))) && (!f || (etatListe.prefixeFacette === "c" ? a.clesCat : a.clesMarque).includes(f))
+      (a) =>
+        (!jetons.length || jetons.every((j) => a.recherche.includes(j))) &&
+        (!f || (etatListe.prefixeFacette === "c" ? a.clesCat : a.clesMarque).includes(f)) &&
+        (!avecColoris || nbColoris(a) > 1)
     );
-    if (tri === "az") res = res.slice().sort((a, b) => collator.compare(a.titre, b.titre));
+    if (tri === "coloris") res = res.slice().sort((a, b) => nbColoris(b) - nbColoris(a) || a.ordre - b.ordre);
+    else if (tri === "az") res = res.slice().sort((a, b) => collator.compare(a.titre, b.titre));
     else if (tri === "za") res = res.slice().sort((a, b) => collator.compare(b.titre, a.titre));
     else if (q) {
       const score = (a) => (a.cleTitre.startsWith(q) ? 0 : a.cleTitre.includes(q) ? 1 : 2);
@@ -678,10 +692,15 @@
     $("#vide").hidden = res.length > 0 || (suggestions && !q);
     if (!res.length) $("#vide-texte").textContent = q ? `Rien ne correspond à « ${r.p.get("q")} ».` : "Aucun article dans cette sélection de filtres.";
     document.querySelectorAll("[data-facette]").forEach((b) => {
-      const actif = b.dataset.facette === f;
+      const actif = b.dataset.facette === f && !(avecColoris && !f);
       b.setAttribute("aria-pressed", String(actif));
       b.classList.toggle("est-actif", actif);
     });
+    const pastilleColoris = $("[data-filtre-coloris]");
+    if (pastilleColoris) {
+      pastilleColoris.setAttribute("aria-pressed", String(avecColoris));
+      pastilleColoris.classList.toggle("est-actif", avecColoris);
+    }
   }
 
   function afficherSuite() {
@@ -776,7 +795,7 @@
   function listeDeNavigation(id, contexte) {
     const a = parId.get(id);
     if (contexte && listes[contexte] && listes[contexte].includes(a)) return listes[contexte];
-    for (const nom of ["liste", "selection", "outfits", "nouveautes", "une", "decouvertes"]) if (listes[nom] && listes[nom].includes(a)) return listes[nom];
+    for (const nom of ["liste", "selection", "outfits", "nouveautes", "une", "coloris", "decouvertes"]) if (listes[nom] && listes[nom].includes(a)) return listes[nom];
     return (a.clesCat[0] && categories.get(a.clesCat[0])?.articles) || [a];
   }
 
@@ -834,6 +853,11 @@
         ${etiquettes.length ? `<p class="etiquettes">${etiquettes.join("")}</p>` : ""}
         <h2 class="fiche__titre" id="fiche-titre">${echapper(a.titre)}</h2>
         ${a.sousTitre ? `<p class="fiche__sous">${echapper(a.sousTitre)}</p>` : ""}
+        ${
+          !a.coloris && /(\d+)\s*colou?rways?/i.test(a.sousTitre)
+            ? `<p class="note-coloris">${/(\d+)\s*colou?rways?/i.exec(a.sousTitre)[1]} coloris existent, mais le tableur ne fournit que la photo principale.</p>`
+            : ""
+        }
         ${infosSup.length ? `<dl class="fiche__details">${infosSup.map(([k, v]) => `<div><dt>${echapper(k)}</dt><dd>${echapper(v)}</dd></div>`).join("")}</dl>` : ""}
         <div class="fiche__actions">
           <button type="button" class="bouton bouton--plein bouton-choisir${choisi ? " est-choisi" : ""}" data-sel="${idSel}" aria-pressed="${choisi}">${ICONE_COEUR}<span class="libelle">${choisi ? "Dans ma sélection" : "Ajouter à ma sélection"}</span></button>
@@ -998,12 +1022,21 @@
       naviguer(r.chemin, r.p, true);
       return;
     }
+    if (e.target.closest("[data-filtre-coloris]")) {
+      const r = route();
+      if (r.p.get("col") === "1") r.p.delete("col");
+      else r.p.set("col", "1");
+      remplacerSilencieusement(r);
+      majListe();
+      return;
+    }
     const facette = e.target.closest("[data-facette]");
     if (facette) {
       const r = route();
       const actuelle = r.p.get("f") || "";
       if (facette.dataset.facette && facette.dataset.facette !== actuelle) r.p.set("f", facette.dataset.facette);
       else r.p.delete("f");
+      if (!facette.dataset.facette) r.p.delete("col"); // « Tout » retire aussi le filtre coloris
       remplacerSilencieusement(r);
       majListe();
       return;

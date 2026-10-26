@@ -517,6 +517,7 @@ select {
   scroll-snap-align: start;
 }
 .vignette > a {
+  position: relative;
   display: block;
   aspect-ratio: 4 / 5;
   border-radius: var(--rayon);
@@ -970,6 +971,17 @@ dialog {
   margin: 6px 0 0;
   color: var(--texte-doux);
 }
+/* Pastille « Plusieurs coloris » : mise en avant dans la rangée de filtres */
+.pastille-filtre--coloris {
+  border-color: var(--texte-doux);
+  font-weight: 500;
+}
+.note-coloris {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--discret);
+}
+
 /* Coloris dans la fiche : vignettes cliquables */
 .coloris {
   margin-top: 18px;

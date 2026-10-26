@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <a class="lien-evitement" href="#page">Aller au contenu</a>
@@ -111,8 +111,9 @@
 
   <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
 
-  <script src="config.js"></script>
-  <script src="donnees.js"></script>
-  <script src="app.js"></script>
+  <!-- « ?v= » : à augmenter à chaque mise à jour, pour que les navigateurs rechargent les fichiers -->
+  <script src="config.js?v=8"></script>
+  <script src="donnees.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

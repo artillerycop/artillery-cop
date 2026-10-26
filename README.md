@@ -91,6 +91,9 @@ Pour le catalogue JSON, c'est l'inverse : son type passe d'abord, mais il est co
 
   Le nom de la couleur avant « : » est facultatif.
 - **La sélection retient le coloris choisi**, et la liste copiée l'indique.
+- **Pour les trouver :** la pastille « Plusieurs coloris » en tête des filtres de chaque liste, le tri « Coloris d'abord » et la rangée « Plusieurs coloris » de l'accueil.
+
+Après chaque mise à jour du code, augmentez le numéro `?v=` dans `index.html`. Les navigateurs, qui gardent les fichiers en cache 10 minutes, rechargeront alors la nouvelle version.
 
 ## Marques et familles
 
