@@ -155,10 +155,13 @@
       a.ordre = i;
       const titre = normaliser(a.titre + " " + a.sousTitre);
       a.cleTitre = titre;
-      a.recherche = normaliser([a.titre, a.sousTitre, a.description, ...a.categories, ...a.tags, ...a.marques, ...a.extras.map((x) => x.texte)].join(" "));
+      a.recherche = normaliser(
+        [a.titre, a.sousTitre, a.description, ...a.categories, ...a.tags, ...a.marques, ...a.extras.map((x) => x.texte), ...(a.coloris || []).map((c) => c.couleur)].join(" ")
+      );
       a.categories.forEach((c) => ajouterAuGroupe(categories, c, a));
       a.marques.forEach((m) => ajouterAuGroupe(marques, m, a));
       parId.set(a.id, a);
+      if (a.coloris) for (const c of a.coloris) parId.set(c.id, a);
     });
     // Les marques trop rares n'ont pas leur page
     const min = CFG.minArticlesMarque || 1;
@@ -277,12 +280,13 @@
 
   const lienPartage = (ids) => location.href.split("#")[0].split("?")[0] + "#/selection?ids=" + ids.join(",");
 
-  function texteSelection(liste) {
-    const lignes = liste.map((a, i) => {
-      const details = [a.sousTitre, a.categories[0] && joli(a.categories[0])].filter(Boolean).join(" — ");
+  function texteSelection(ids) {
+    const lignes = ids.map((id, i) => {
+      const { a, c } = vueDe(id);
+      const details = [c ? c.couleur : a.sousTitre, a.categories[0] && joli(a.categories[0])].filter(Boolean).join(" — ");
       return `${i + 1}. ${a.titre}${details ? " (" + details + ")" : ""}`;
     });
-    return `Ma sélection — ${liste.length} article${liste.length > 1 ? "s" : ""}\n\n${lignes.join("\n")}\n\nVoir les photos : ${lienPartage(liste.map((a) => a.id))}`;
+    return `Ma sélection — ${ids.length} article${ids.length > 1 ? "s" : ""}\n\n${lignes.join("\n")}\n\nVoir les photos : ${lienPartage(ids)}`;
   }
 
   async function copier(texte, message) {
@@ -367,11 +371,21 @@
 
   const initiale = (t) => echapper((String(t).match(/[A-Za-z0-9À-ÿ]/) || ["·"])[0].toUpperCase());
 
-  function image(a, classe, eager, hd) {
-    const src = hd && a.imageHD ? a.imageHD : a.image;
+  function image(a, classe, eager, hd, coloris) {
+    const ref = coloris || a;
+    const src = hd && ref.imageHD ? ref.imageHD : ref.image;
+    const alt = coloris && coloris.couleur ? `${a.titre} — ${coloris.couleur}` : a.titre;
     return src
-      ? `<img class="${classe}" src="${echapper(src)}" alt="${echapper(a.titre)}" ${eager ? "" : 'loading="lazy"'} decoding="async" referrerpolicy="no-referrer">`
+      ? `<img class="${classe}" src="${echapper(src)}" alt="${echapper(alt)}" ${eager ? "" : 'loading="lazy"'} decoding="async" referrerpolicy="no-referrer">`
       : `<span class="${classe} sans-image" aria-hidden="true">${initiale(a.titre)}</span>`;
+  }
+
+  /** Un identifiant peut désigner un coloris précis : renvoie l'article et ce coloris (ou null). */
+  function vueDe(id) {
+    const a = parId.get(id);
+    if (!a) return null;
+    const c = a.coloris ? a.coloris.find((x) => x.id === id) || a.coloris[0] : null;
+    return { a, c };
   }
 
   /** Lien vers la fiche, en restant sur la page courante. */
@@ -387,14 +401,18 @@
   }
 
   /** Tuile d'une grille : grande image, nom discret, cœur de sélection. */
-  function tuile(a, contexte, retirable) {
+  function tuile(a, contexte, retirable, idChoisi) {
+    const id = idChoisi || a.id;
+    const c = idChoisi && a.coloris ? a.coloris.find((x) => x.id === idChoisi) : null;
+    const n = a.coloris ? a.coloris.length : 0;
+    const sous = c ? c.couleur || a.sousTitre : a.sousTitre;
     return `<li class="tuile">
-      <a class="tuile__lien" href="${hrefFiche(a.id)}" data-fiche="${a.id}" data-contexte="${contexte}">
-        <div class="tuile__media">${image(a, "tuile__image")}</div>
+      <a class="tuile__lien" href="${hrefFiche(id)}" data-fiche="${id}" data-contexte="${contexte}">
+        <div class="tuile__media">${image(a, "tuile__image", false, false, c)}${n > 1 && !c ? `<span class="badge-coloris">${n} coloris</span>` : ""}</div>
         <p class="tuile__titre">${echapper(a.titre)}</p>
-        ${a.sousTitre ? `<p class="tuile__sous">${echapper(a.sousTitre)}</p>` : ""}
+        ${sous ? `<p class="tuile__sous">${echapper(sous)}</p>` : ""}
       </a>
-      ${retirable ? `<button type="button" class="retirer" data-sel="${a.id}" aria-label="Retirer de ma sélection : ${echapper(a.titre)}">Retirer</button>` : boutonCoeur(a)}
+      ${retirable ? `<button type="button" class="retirer" data-sel="${id}" aria-label="Retirer de ma sélection : ${echapper(a.titre)}">Retirer</button>` : boutonCoeur(a)}
     </li>`;
   }
 
@@ -698,12 +716,13 @@
   function pageSelection(r) {
     const partagee = r.p.get("ids");
     const ids = partagee ? partagee.split(",").filter(Boolean) : selection;
-    const liste = ids.map((id) => parId.get(id)).filter(Boolean);
-    const manquants = ids.length - liste.length;
+    const vus = ids.filter((id) => parId.has(id));
+    const liste = [...new Set(vus.map((id) => parId.get(id)))];
+    const manquants = ids.length - vus.length;
     listes.selection = liste;
     etatListe.resultats = [];
     etatListe.affiches = 0;
-    const n = liste.length;
+    const n = vus.length;
 
     page.innerHTML = `
       <div class="entete-liste">
@@ -725,7 +744,7 @@
                <button type="button" class="bouton bouton--discret" data-action="vider">Vider</button>`
         }
       </div>
-      <ul class="grille grille--selection">${liste.map((a) => tuile(a, "selection", !partagee)).join("")}</ul>`
+      <ul class="grille grille--selection">${vus.map((id) => tuile(parId.get(id), "selection", !partagee, id)).join("")}</ul>`
           : `<div class="vide">
         <p class="vide__titre">${partagee ? "Sélection introuvable" : "Votre sélection est vide"}</p>
         <p class="vide__texte">${partagee ? "Ces articles ne sont plus dans le catalogue." : "Touchez le cœur d'un article pour l'ajouter ici, puis partagez la liste de ce que vous voulez acheter."}</p>
@@ -755,9 +774,9 @@
 
   /** Liste dans laquelle on navigue avec ← → : celle d'où l'on vient, sinon la catégorie. */
   function listeDeNavigation(id, contexte) {
-    if (contexte && listes[contexte] && listes[contexte].some((a) => a.id === id)) return listes[contexte];
-    for (const nom of ["liste", "selection", "outfits", "nouveautes", "une", "decouvertes"]) if (listes[nom] && listes[nom].some((a) => a.id === id)) return listes[nom];
     const a = parId.get(id);
+    if (contexte && listes[contexte] && listes[contexte].includes(a)) return listes[contexte];
+    for (const nom of ["liste", "selection", "outfits", "nouveautes", "une", "decouvertes"]) if (listes[nom] && listes[nom].includes(a)) return listes[nom];
     return (a.clesCat[0] && categories.get(a.clesCat[0])?.articles) || [a];
   }
 
@@ -777,14 +796,16 @@
   }
 
   function ouvrirFiche(id) {
-    const a = parId.get(id);
-    if (!fiche.el.open || !fiche.liste.some((x) => x.id === id)) fiche.liste = listeDeNavigation(id, fiche.contexte);
-    fiche.i = Math.max(0, fiche.liste.findIndex((x) => x.id === id));
-    const choisi = estChoisi(id);
+    const { a, c } = vueDe(id);
+    if (!fiche.el.open || !fiche.liste.includes(a)) fiche.liste = listeDeNavigation(id, fiche.contexte);
+    fiche.i = Math.max(0, fiche.liste.indexOf(a));
+    // La sélection retient le coloris affiché
+    const idSel = c ? c.id : a.id;
+    const choisi = estChoisi(idSel);
     const sim = similaires(a);
     listes.similaires = sim;
 
-    fiche.cadre.innerHTML = image(a, "fiche__image", true, true);
+    fiche.cadre.innerHTML = image(a, "fiche__image", true, true, c);
     fiche.cadre.classList.remove("est-zoome");
     $("#fiche-position").textContent = fiche.liste.length > 1 ? `${fiche.i + 1} / ${fiche.liste.length}` : "";
     $("#fiche-prec").hidden = $("#fiche-suiv").hidden = fiche.liste.length < 2;
@@ -797,12 +818,25 @@
 
     fiche.infos.innerHTML = `
       <div class="fiche__texte">
+        ${
+          a.coloris && a.coloris.length > 1
+            ? `<div class="coloris coloris--haut" role="group" aria-label="Coloris">
+          <p class="coloris__titre">Coloris : <span>${echapper(c.couleur || `n° ${a.coloris.indexOf(c) + 1}`)}</span></p>
+          <div class="coloris__liste">${a.coloris
+            .map(
+              (x, i) => `<a class="coloris__item${x === c ? " est-actif" : ""}" href="${hrefFiche(x.id)}" data-coloris="${x.id}" aria-label="${echapper(x.couleur || `Coloris ${i + 1}`)}"${x === c ? ' aria-current="true"' : ""}>
+                <img src="${echapper(x.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></a>`
+            )
+            .join("")}</div>
+        </div>`
+            : ""
+        }
         ${etiquettes.length ? `<p class="etiquettes">${etiquettes.join("")}</p>` : ""}
         <h2 class="fiche__titre" id="fiche-titre">${echapper(a.titre)}</h2>
         ${a.sousTitre ? `<p class="fiche__sous">${echapper(a.sousTitre)}</p>` : ""}
         ${infosSup.length ? `<dl class="fiche__details">${infosSup.map(([k, v]) => `<div><dt>${echapper(k)}</dt><dd>${echapper(v)}</dd></div>`).join("")}</dl>` : ""}
         <div class="fiche__actions">
-          <button type="button" class="bouton bouton--plein bouton-choisir${choisi ? " est-choisi" : ""}" data-sel="${a.id}" aria-pressed="${choisi}">${ICONE_COEUR}<span class="libelle">${choisi ? "Dans ma sélection" : "Ajouter à ma sélection"}</span></button>
+          <button type="button" class="bouton bouton--plein bouton-choisir${choisi ? " est-choisi" : ""}" data-sel="${idSel}" aria-pressed="${choisi}">${ICONE_COEUR}<span class="libelle">${choisi ? "Dans ma sélection" : "Ajouter à ma sélection"}</span></button>
           <button type="button" class="bouton bouton--contour" data-action="copier-lien">Copier le lien</button>
         </div>
       </div>
@@ -956,6 +990,14 @@
       naviguer(r.chemin, r.p, dejaOuverte); // depuis une fiche : on remplace, sinon on empile
       return;
     }
+    const coloris = e.target.closest("[data-coloris]");
+    if (coloris && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      const r = route();
+      r.p.set("a", coloris.dataset.coloris);
+      naviguer(r.chemin, r.p, true);
+      return;
+    }
     const facette = e.target.closest("[data-facette]");
     if (facette) {
       const r = route();
@@ -974,15 +1016,15 @@
     }
     const action = e.target.closest("[data-action]");
     if (!action) return;
-    const choisis = selection.map((id) => parId.get(id)).filter(Boolean);
+    const choisis = selection.filter((id) => parId.has(id));
     switch (action.dataset.action) {
       case "copier":
         copier(texteSelection(choisis), "Liste copiée");
         break;
       case "partager":
         if (navigator.share) {
-          navigator.share({ title: "Ma sélection", text: texteSelection(choisis), url: lienPartage(choisis.map((a) => a.id)) }).catch(() => {});
-        } else copier(lienPartage(choisis.map((a) => a.id)), "Lien de partage copié");
+          navigator.share({ title: "Ma sélection", text: texteSelection(choisis), url: lienPartage(choisis) }).catch(() => {});
+        } else copier(lienPartage(choisis), "Lien de partage copié");
         break;
       case "vider":
         if (confirm("Vider votre sélection ?")) {

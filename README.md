@@ -80,6 +80,18 @@ Pour le catalogue JSON, c'est l'inverse : son type passe d'abord, mais il est co
 
 **Retirer une marque :** ajoutez-la à `exclureMarques` (actuellement Apple et Kaws).
 
+## Coloris
+
+- **Collection (catalogue JSON) :** les photos d'un même produit dans des couleurs différentes sont regroupées en un seul article. Il s'agit des photos du même album, envoyées au même moment, de même type et de même prix. La grille affiche un badge « N coloris » ; la fiche montre les vignettes de chaque coloris, et chaque coloris a son propre lien.
+- **Tableurs :** ils n'ont qu'une photo par article. Pour montrer les autres coloris, ajoutez une colonne **« Coloris »** contenant les photos, séparées par des virgules :
+
+  ```
+  Noir: https://…/noir.jpg, Blanc: https://…/blanc.jpg, https://…/autre.jpg
+  ```
+
+  Le nom de la couleur avant « : » est facultatif.
+- **La sélection retient le coloris choisi**, et la liste copiée l'indique.
+
 ## Marques et familles
 
 La liste `marques` est regroupée par famille : Luxe & haute couture, Créateurs & contemporain, Streetwear, Sport & sneakers, Outdoor & doudounes, Horlogerie & joaillerie. Chaque famille a sa page (`#/f/…`) et sa carte « Univers » sur l'accueil. Dans Explorer, les marques sont rangées par famille. Une marque n'apparaît qu'à partir de `minArticlesMarque` articles.

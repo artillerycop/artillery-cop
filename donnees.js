@@ -312,6 +312,8 @@
 
   // Les colonnes QC et prix restent détectées : c'est ce qui permet de les écarter de l'affichage.
   const CHAMPS = {
+    // « Coloris » / « Colorways » : photos des différents coloris (pas « COLORS », simple nombre)
+    colorisImages: [/\b(colou?rways?|coloris|variantes?)\b/],
     qcImages: [/\bqc\b.*\b(photos?|images?|imgs?|pics?)\b/, /\b(photos?|images?|imgs?|pics?)\b.*\bqc\b/],
     qc: [/\bqc\b/, /reptools|rep\.tools/, /quality ?check/, /controle qualite/],
     titre: [/\b(item ?name|nom|titre|title|name|produit|product|article|designation|item|modele|model)\b/],
@@ -332,6 +334,7 @@
     lien: "Lien d'achat",
     qc: "Lien QC",
     qcImages: "Photos QC",
+    colorisImages: "Coloris",
     tags: "Tags",
     date: "Date",
   };
@@ -401,6 +404,7 @@
       if (force) [champ, confiance] = [force, 3];
       else if (!s.n) continue;
       else if (parEntete === "qcImages") [champ, confiance] = ["qcImages", 2]; // « Photos QC » : une ou plusieurs URL par cellule
+      else if (parEntete === "colorisImages") [champ, confiance] = ["colorisImages", 2]; // « Coloris » : une URL par coloris
       else if (ratio(s, "image") >= 0.5) [champ, confiance] = [parEntete === "qc" || parEntete === "qcImages" ? "qcImages" : "image", 2];
       else if (ratio(s, "qc") >= 0.5 || (parEntete === "qc" && ratio(s, "lien") >= 0.5)) [champ, confiance] = ["qc", 2];
       else if (ratio(s, "lien") >= 0.5) [champ, confiance] = ["lien", 2];
@@ -482,6 +486,8 @@
         tags: v.tags ? v.tags.texte.split(/[,;|#]/).map((s) => s.trim()).filter(Boolean) : [],
         image: v.image ? urlSure(v.image.image) : "",
         date: v.date ? lireDate(v.date.texte) : null,
+        // Photos des coloris (colonne « Coloris ») : « Rouge: https://… , Noir: https://… » ou URL seules
+        _coloris: v.colorisImages ? lireColoris([v.colorisImages.image, v.colorisImages.texte].join(",")) : [],
         // Infos supplémentaires textuelles (ex. nombre de coloris) ; jamais de lien
         extras: extras.filter((x) => !x.cellule.lien && !x.cellule.image).map((x) => ({ libelle: x.libelle, texte: x.cellule.texte })),
         // Clé de doublon : le lien d'achat s'il existe, sinon titre + prix. Non affichée.
@@ -491,6 +497,19 @@
       });
     });
     return articles;
+  }
+
+  /** « Rouge: https://a.jpg, https://b.jpg » -> [{ couleur: "Rouge", image }, { couleur: "", image }] */
+  function lireColoris(texte) {
+    const vus = new Set();
+    const sortie = [];
+    for (const morceau of String(texte || "").split(/[,;|\n]+/)) {
+      const m = /^\s*(?:([^:]{1,40}?)\s*:\s*)?((?:https?:\/\/|images\/)\S+)\s*$/i.exec(morceau);
+      if (!m || vus.has(m[2])) continue;
+      vus.add(m[2]);
+      sortie.push({ couleur: (m[1] || "").trim(), image: urlSure(m[2]) });
+    }
+    return sortie.filter((c) => c.image);
   }
 
   /** Fusionne les doublons (même article présent dans plusieurs sections ou tableurs). */
@@ -512,6 +531,11 @@
       }
       a.id = empreinte(cle);
       a.sources = [a.source];
+      // Coloris venant du tableur : la photo principale d'abord, puis ceux de la colonne « Coloris »
+      if (a._coloris && a._coloris.length) {
+        a.coloris = [{ id: a.id, couleur: "", image: a.image }, ...a._coloris.map((c, i) => ({ id: `${a.id}-${i + 1}`, couleur: c.couleur, image: c.image }))].filter((c) => c.image);
+      }
+      delete a._coloris;
       index.set(cle, a);
       sortie.push(a);
     }
@@ -596,6 +620,9 @@
       const couleur = p.cl || p.fc || "";
       const base = urlSure(prefixe + p.p + "_" + p.s);
       articles.push({
+        // Même album, même envoi, même type et même prix : ce sont les coloris d'un même produit
+        _groupe: couleur && !estOutfit ? [p.a, p.u, ft, p.t].join("|") : "",
+        _ordre: +p.o || 0,
         source,
         id: "h" + p.p,
         titre,
@@ -617,7 +644,36 @@
         sources: [source],
       });
     }
-    return articles;
+    return regrouperColoris(articles);
+  }
+
+  /**
+   * Regroupe en un seul article les photos d'un même produit dans des couleurs différentes.
+   * L'article garde l'identifiant et la photo du premier coloris ; chaque coloris garde son
+   * propre identifiant, pour les liens directs et la sélection.
+   */
+  function regrouperColoris(articles) {
+    const groupes = new Map();
+    for (const a of articles) if (a._groupe) (groupes.get(a._groupe) || groupes.set(a._groupe, []).get(a._groupe)).push(a);
+    const absorbes = new Set();
+    for (const membres of groupes.values()) {
+      const couleurs = new Set(membres.map((a) => normaliser(a.sousTitre)));
+      // Au moins 2 photos, toutes de couleurs différentes ; sinon ce ne sont pas des coloris
+      if (membres.length < 2 || couleurs.size !== membres.length) continue;
+      membres.sort((a, b) => a._ordre - b._ordre);
+      const principal = membres[0];
+      principal.coloris = membres.map((a) => ({ id: a.id, couleur: a.sousTitre, image: a.image, imageHD: a.imageHD }));
+      principal.sousTitre = `${membres.length} coloris`;
+      principal.extras = [];
+      for (const a of membres.slice(1)) absorbes.add(a);
+    }
+    return articles
+      .filter((a) => !absorbes.has(a))
+      .map((a) => {
+        delete a._groupe;
+        delete a._ordre;
+        return a;
+      });
   }
 
   async function chargerSource(src) {
