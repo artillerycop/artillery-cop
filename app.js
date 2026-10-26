@@ -15,6 +15,7 @@
  *   #/c/<categorie>    une catégorie        #/m/<marque>   une marque
  *   #/tout             tout le catalogue    #/recherche?q= une recherche
  *   #/nouveautes       derniers ajouts      #/explorer?t=marques|categories  index A–Z
+ *   #/f/<famille>      une famille de marques (Luxe & haute couture…)   #/une  À la une
  *   #/selection        ma sélection         #/selection?ids=a,b  sélection partagée
  *   …?a=<id>           ajoute la fiche d'un article par-dessus la page
  */
@@ -57,27 +58,67 @@
     const cle = slug(nom);
     if (!cle) return;
     let g = map.get(cle);
-    if (!g) map.set(cle, (g = { cle, nom: joli(nom), articles: [] }));
+    if (!g) map.set(cle, (g = { cle, nom: joli(nom), nomOrigine: nom, articles: [] }));
     if (!g.articles.includes(a)) g.articles.push(a);
   }
 
-  // Marques : on cherche leurs mots-clés dans le nom de chaque article.
-  // Beaucoup de titres se répètent (albums de la collection) : résultat mis en cache.
+  /** Expression qui trouve l'un des mots (entiers) dans un texte normalisé. */
+  const motsEnRegex = (mots) => new RegExp("(^|[^a-z0-9@&])(" + mots.map((m) => echapperRegex(normaliser(m))).join("|") + ")(?=[^a-z0-9]|$)");
+
+  // Marques : config.marques est soit une liste, soit des familles { "Streetwear": [ … ], … }.
+  // On cherche leurs mots-clés dans le nom de chaque article ; beaucoup de titres se répètent
+  // (albums de la collection), d'où le cache.
   let reglesMarques = null;
+  const familleDeMarque = new Map(); // nom de marque -> famille
   const cacheMarques = new Map();
   function detecterMarques(texte) {
     if (cacheMarques.has(texte)) return cacheMarques.get(texte);
     if (!reglesMarques) {
-      reglesMarques = (CFG.marques || []).map(([nom, ...mots]) => ({
-        nom,
-        re: new RegExp("(^|[^a-z0-9])(" + mots.map((m) => echapperRegex(normaliser(m))).join("|") + ")(?=[^a-z0-9]|$)"),
-      }));
+      const familles = Array.isArray(CFG.marques) ? { Marques: CFG.marques } : CFG.marques || {};
+      reglesMarques = [];
+      for (const [famille, liste] of Object.entries(familles)) {
+        for (const [nom, ...mots] of liste) {
+          familleDeMarque.set(nom, famille);
+          reglesMarques.push({ nom, re: motsEnRegex(mots) });
+        }
+      }
     }
     const trouvees = reglesMarques.filter((r) => r.re.test(texte)).map((r) => r.nom);
     cacheMarques.set(texte, trouvees);
     return trouvees;
   }
 
+  // Catégories : un seul classement pour toutes les sources (voir config.categories)
+  let reglesCategories = null;
+  function preparerCategories() {
+    reglesCategories = (CFG.categories || []).map((c) => ({
+      nom: c.nom,
+      retiree: !!c.retiree,
+      re: c.mots && c.mots.length ? motsEnRegex(c.mots) : null,
+      sources: new Set((c.sources || []).map(normaliser)),
+      secours: new Set((c.secours || []).map(normaliser)),
+    }));
+  }
+
+  /**
+   * Classe un article : par les mots de son nom, sinon par sa catégorie d'origine.
+   * Les articles de la collection (type fourni par la source) suivent l'ordre inverse.
+   * Renvoie { categorie } ou { retire: true }.
+   */
+  function categoriser(a) {
+    if (!reglesCategories) preparerCategories();
+    const origines = a.categoriesSource.map(normaliser);
+    // Section d'origine d'une catégorie retirée (ex. « OTHER ») : l'article est retiré quoi qu'il arrive
+    if (reglesCategories.some((c) => c.retiree && origines.some((o) => c.sources.has(o)))) return { retire: true };
+    const parMots = (texte) => (texte ? reglesCategories.find((c) => c.re && c.re.test(texte)) : null);
+    const parOrigine = () =>
+      reglesCategories.find((c) => origines.some((o) => c.sources.has(o))) || reglesCategories.find((c) => origines.some((o) => c.secours.has(o)));
+    const c = a.classementSource ? parOrigine() || parMots(normaliser(a.album || "")) : parMots(normaliser(a.titre + " " + a.sousTitre)) || parOrigine();
+    if (!c) return { categorie: null };
+    return c.retiree ? { retire: true } : { categorie: c.nom };
+  }
+
+  const familles = new Map(); // slug -> { cle, nom, marques: [groupes], articles }
   let nouveautes = []; // articles datés des derniers jours, du plus récent au plus ancien
   let outfits = []; // tenues complètes (album « Outfits »)
 
@@ -86,18 +127,27 @@
     parId.clear();
     categories.clear();
     marques.clear();
+    familles.clear();
+    const aLaUne = normaliser(CFG.aLaUne || "");
     articles.forEach((a) => {
+      // Catégories d'origine gardées à part : le classement peut être refait (arrivée de la collection)
+      if (!a.categoriesSource) a.categoriesSource = a.categories.slice();
+      a.aLaUne = !!aLaUne && a.categoriesSource.some((c) => normaliser(c) === aLaUne);
+      const classe = categoriser(a);
+      a.retire = !!classe.retire;
+      a.categories = classe.categorie ? [classe.categorie] : [];
       const titre = normaliser(a.titre + " " + a.sousTitre);
       // Marque fournie par la source (ramenée au nom de config.js si on le reconnaît), sinon détectée
+      // dans le nom ; pour la collection, dans le nom de l'album (sauf album multi-marques)
       const fournies = (a.marquesForcees || []).map((m) => detecterMarques(normaliser(m))[0] || m);
-      a.marques = [...new Set([...fournies, ...detecterMarques(normaliser(a.album || titre))])];
+      const detectees = a.album ? (a.albumMulti ? [] : detecterMarques(normaliser(a.album))) : detecterMarques(titre);
+      a.marques = [...new Set([...fournies, ...detectees])];
       a.clesCat = a.categories.map(slug);
       a.clesMarque = a.marques.map(slug);
     });
     // Catégories et marques retirées du site (config.js) : leurs articles disparaissent aussi
-    const exCat = new Set((CFG.exclureCategories || []).map(slug));
     const exMarque = new Set((CFG.exclureMarques || []).map(slug));
-    articles = articles.filter((a) => !a.clesCat.some((k) => exCat.has(k)) && !a.clesMarque.some((k) => exMarque.has(k)));
+    articles = articles.filter((a) => !a.retire && !a.clesMarque.some((k) => exMarque.has(k)));
     articles.forEach((a, i) => {
       a.ordre = i;
       const titre = normaliser(a.titre + " " + a.sousTitre);
@@ -111,12 +161,31 @@
     const min = CFG.minArticlesMarque || 1;
     for (const [cle, g] of marques) if (g.articles.length < min) marques.delete(cle);
 
+    // Familles de marques (Luxe & haute couture, Streetwear…) : regroupent marques et articles
+    for (const g of marques.values()) {
+      const nomFamille = familleDeMarque.get(g.nomOrigine) || familleDeMarque.get(g.nom);
+      if (!nomFamille) continue;
+      g.famille = slug(nomFamille);
+      let f = familles.get(g.famille);
+      if (!f) familles.set(g.famille, (f = { cle: g.famille, nom: nomFamille, marques: [], vus: new Set(), articles: [] }));
+      f.marques.push(g);
+      for (const a of g.articles) if (!f.vus.has(a)) f.vus.add(a), f.articles.push(a);
+    }
+    for (const f of familles.values()) {
+      f.articles.sort((a, b) => a.ordre - b.ordre);
+      f.marques.sort((a, b) => b.articles.length - a.articles.length);
+      delete f.vus;
+    }
+
     const dates = articles.filter((a) => a.date && !a.outfit);
     const plusRecente = dates.reduce((max, a) => Math.max(max, +a.date), 0);
     const limite = plusRecente - (CFG.joursNouveautes || 21) * 86400000;
     nouveautes = dates.filter((a) => +a.date >= limite && a.image).sort((a, b) => b.date - a.date || a.ordre - b.ordre);
     outfits = articles.filter((a) => a.outfit && a.image);
   }
+
+  // Accès en lecture depuis la console du navigateur, pour vérifier le classement
+  window.__catalogue = { articles: () => articles, categories, marques, familles };
 
   /** Image représentative d'un groupe : le premier article illustré. */
   const couverture = (liste) => (liste.find((a) => a.image) || {}).image || "";
@@ -335,12 +404,12 @@
   }
 
   /** Grande carte d'une catégorie ou d'une marque (image + nom + nombre). */
-  function carteGroupe(g, prefixe) {
+  function carteGroupe(g, prefixe, legende) {
     const n = g.articles.length;
     const img = couverture(g.articles);
     return `<li><a class="groupe" href="#/${prefixe}/${g.cle}">
       ${img ? `<img src="${echapper(img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<span class="sans-image" aria-hidden="true">${initiale(g.nom)}</span>`}
-      <span class="groupe__texte"><span class="groupe__nom">${echapper(g.nom)}</span><span class="groupe__n">${n} article${n > 1 ? "s" : ""}</span></span>
+      <span class="groupe__texte"><span class="groupe__nom">${echapper(g.nom)}</span><span class="groupe__n">${legende || `${n.toLocaleString("fr-FR")} article${n > 1 ? "s" : ""}`}</span></span>
     </a></li>`;
   }
 
@@ -370,7 +439,7 @@
     // Les listes de navigation ne valent que pour la page affichée
     for (const nom of Object.keys(listes)) delete listes[nom];
     if (vue === "") titreDoc = pageAccueil();
-    else if (["c", "m", "tout", "recherche", "nouveautes"].includes(vue)) titreDoc = pageListe(r);
+    else if (["c", "m", "f", "une", "tout", "recherche", "nouveautes"].includes(vue)) titreDoc = pageListe(r);
     else if (vue === "explorer") titreDoc = pageExplorer(r);
     else if (vue === "selection") titreDoc = pageSelection(r);
     else titreDoc = pageIntrouvable();
@@ -387,13 +456,13 @@
 
   function pageAccueil() {
     const tous = articles.filter((a) => a.image);
-    const une = categories.get(slug(CFG.aLaUne || "")) || null;
-    const listeUne = une ? une.articles.filter((a) => a.image) : [];
+    const listeUne = articles.filter((a) => a.aLaUne && a.image);
     const decouvertes = melangeDuJour(tous.filter((a) => !a.outfit && !listeUne.slice(0, 24).includes(a))).slice(0, 24);
     const parTaille = (a, b) => b.articles.length - a.articles.length || collator.compare(a.nom, b.nom);
     const n = CFG.cartesAccueil || 12;
     const groupesMarques = [...marques.values()].sort(parTaille);
-    const groupesCats = [...categories.values()].filter((g) => (!une || g.cle !== une.cle) && g.cle !== "outfit").sort(parTaille);
+    const groupesCats = [...categories.values()].filter((g) => g.cle !== "outfit").sort(parTaille);
+    const groupesFamilles = [...familles.values()].sort(parTaille);
     const lienExplorer = (t, total) => `<a class="voir-tout" href="#/explorer?t=${t}">Tout voir (${total}) <span aria-hidden="true">→</span></a>`;
 
     page.innerHTML = `
@@ -409,8 +478,14 @@
       </section>
       ${outfits.length ? rangee("Outfits · Inspiration", "#/c/outfit", outfits.length, outfits.slice(0, 20), "outfits", true) : ""}
       ${rangee("Nouveautés", "#/nouveautes", nouveautes.length, nouveautes.slice(0, 24), "nouveautes")}
-      ${rangee("À la une", une ? `#/c/${une.cle}` : "", une ? une.articles.length : 0, listeUne.slice(0, 24), "une")}
+      ${rangee("À la une", "#/une", listeUne.length, listeUne.slice(0, 24), "une")}
       ${rangee("Découvertes du jour", "#/tout", articles.length, decouvertes, "decouvertes")}
+      ${
+        groupesFamilles.length
+          ? `<section class="bloc" aria-labelledby="titre-univers"><h2 class="titre-section" id="titre-univers">Univers</h2>
+             <ul class="mosaique mosaique--univers">${groupesFamilles.map((f) => carteGroupe(f, "f", `${f.marques.length} marques · ${f.articles.length.toLocaleString("fr-FR")} articles`)).join("")}</ul></section>`
+          : ""
+      }
       ${
         groupesMarques.length
           ? `<section class="bloc" aria-labelledby="titre-marques"><div class="rangee__entete"><h2 class="titre-section" id="titre-marques">Marques</h2>${lienExplorer("marques", groupesMarques.length)}</div>
@@ -427,6 +502,24 @@
     const t = r.p.get("t") === "categories" ? "categories" : "marques";
     const groupes = [...(t === "marques" ? marques : categories).values()].sort((a, b) => collator.compare(a.nom, b.nom));
     const prefixe = t === "marques" ? "m" : "c";
+    const ligne = (g, p) => {
+      const img = couverture(g.articles);
+      return `<li data-nom="${echapper(normaliser(g.nom))}"><a href="#/${p}/${g.cle}">
+            <span class="index__image">${img ? `<img src="${echapper(img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : initiale(g.nom)}</span>
+            <span class="index__nom">${echapper(g.nom)}</span><span class="index__n">${g.articles.length.toLocaleString("fr-FR")}</span>
+            <span class="index__fleche" aria-hidden="true">›</span></a></li>`;
+    };
+    // Marques : une section par famille, ouverte par sa propre page (#/f/…) ; le reste à la fin
+    const parFamille = [...familles.values()].sort((a, b) => b.articles.length - a.articles.length);
+    const sansFamille = groupes.filter((g) => !g.famille);
+    const listeMarques = parFamille
+      .map(
+        (f) => `<section class="index-famille" data-famille>
+          <h2 class="index-famille__titre"><a href="#/f/${f.cle}">${echapper(f.nom)} <span>${f.marques.length} marques · tout voir ›</span></a></h2>
+          <ul class="index">${f.marques.slice().sort((a, b) => collator.compare(a.nom, b.nom)).map((g) => ligne(g, "m")).join("")}</ul>
+        </section>`
+      )
+      .join("") + (sansFamille.length ? `<section class="index-famille" data-famille><h2 class="index-famille__titre">Autres marques</h2><ul class="index">${sansFamille.map((g) => ligne(g, "m")).join("")}</ul></section>` : "");
     page.innerHTML = `
       <div class="entete-liste"><div><h1 class="entete-liste__titre">Explorer</h1></div></div>
       <div class="segments" role="tablist" aria-label="Type de liste">
@@ -438,15 +531,7 @@
         <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <input id="filtre-index" type="search" placeholder="${t === "marques" ? "Une marque…" : "Une catégorie…"}" autocomplete="off">
       </form>
-      <ul class="index" id="index">${groupes
-        .map((g) => {
-          const img = couverture(g.articles);
-          return `<li data-nom="${echapper(normaliser(g.nom))}"><a href="#/${prefixe}/${g.cle}">
-            <span class="index__image">${img ? `<img src="${echapper(img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : initiale(g.nom)}</span>
-            <span class="index__nom">${echapper(g.nom)}</span><span class="index__n">${g.articles.length}</span>
-            <span class="index__fleche" aria-hidden="true">›</span></a></li>`;
-        })
-        .join("")}</ul>`;
+      <div id="index">${t === "marques" ? listeMarques : `<ul class="index">${groupes.map((g) => ligne(g, prefixe)).join("")}</ul>`}</div>`;
     return "Explorer";
   }
 
@@ -458,13 +543,17 @@
     let base = articles;
     let facettes = categories; // pastilles proposées pour affiner
     let prefixeFacette = "c";
-    if (vue === "c" || vue === "m") {
-      groupe = (vue === "c" ? categories : marques).get(cle);
+    if (vue === "c" || vue === "m" || vue === "f") {
+      groupe = (vue === "c" ? categories : vue === "m" ? marques : familles).get(cle);
       if (!groupe) return pageIntrouvable();
       titre = groupe.nom;
       base = groupe.articles;
-      facettes = vue === "c" ? marques : categories;
-      prefixeFacette = vue === "c" ? "m" : "c";
+      // Catégorie ou famille : on affine par marque ; marque : par catégorie
+      facettes = vue === "m" ? categories : marques;
+      prefixeFacette = vue === "m" ? "c" : "m";
+    } else if (vue === "une") {
+      titre = "À la une";
+      base = articles.filter((a) => a.aLaUne);
     } else if (vue === "recherche") titre = "Recherche";
     else if (vue === "nouveautes") {
       titre = "Nouveautés";
@@ -824,7 +913,7 @@
 
   /** Met en avant l'onglet de la page courante (barre du bas sur téléphone). */
   function majOnglets(vue) {
-    const actif = vue === "" ? "accueil" : vue === "explorer" || vue === "c" || vue === "m" || vue === "tout" || vue === "nouveautes" ? "explorer" : vue === "recherche" ? "recherche" : vue === "selection" ? "selection" : "";
+    const actif = vue === "" ? "accueil" : ["explorer", "c", "m", "f", "une", "tout", "nouveautes"].includes(vue) ? "explorer" : vue === "recherche" ? "recherche" : vue === "selection" ? "selection" : "";
     document.querySelectorAll("[data-onglet]").forEach((o) => {
       if (o.dataset.onglet === actif) o.setAttribute("aria-current", "page");
       else o.removeAttribute("aria-current");
@@ -935,6 +1024,7 @@
     if (e.target.id === "filtre-index") {
       const q = normaliser(e.target.value);
       document.querySelectorAll("#index li").forEach((li) => (li.hidden = !!q && !li.dataset.nom.includes(q)));
+      document.querySelectorAll("#index [data-famille]").forEach((f) => (f.hidden = !f.querySelector("li:not([hidden])")));
     }
   });
   document.addEventListener("change", (e) => {
@@ -978,7 +1068,13 @@
     if (champ && champ.id === "filtre-texte") {
       // L'utilisateur tape dans une liste : on garde le champ, on met juste la liste à jour
       const [vue, cle] = r.seg;
-      etatListe.base = vue === "c" ? categories.get(cle)?.articles || [] : vue === "m" ? marques.get(cle)?.articles || [] : vue === "nouveautes" ? nouveautes : articles;
+      etatListe.base =
+        vue === "c" ? categories.get(cle)?.articles || []
+        : vue === "m" ? marques.get(cle)?.articles || []
+        : vue === "f" ? familles.get(cle)?.articles || []
+        : vue === "une" ? articles.filter((a) => a.aLaUne)
+        : vue === "nouveautes" ? nouveautes
+        : articles;
       majListe();
     } else if (!champ) {
       const y = scrollY;

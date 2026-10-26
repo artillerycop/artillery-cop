@@ -543,24 +543,56 @@
     Chaussure: "Chaussures", Sac: "Sacs", Veste: "Vestes", Bijou: "Bijoux", Electronique: "Électronique",
     Casquette: "Casquettes", Ceinture: "Ceintures", "Écharpe": "Écharpes", Valise: "Valises", Jouet: "Jouets", Outfit: "Outfits",
   };
+  // Albums dont le type est précis : un article d'un autre type y est forcément mal étiqueté
+  const TYPES_COMPATIBLES = {
+    Chaussure: ["Chaussures"], Ceinture: ["Ceinture", "Ceintures"], Casquette: ["Casquettes", "Bonnets"],
+    "Écharpe": ["Écharpes", "Bonnets"], Bijou: ["Bijoux"], Jouet: ["Jouets"], Valise: ["Valises"], Electronique: ["Électronique"],
+  };
+
+  /**
+   * Le type fourni par le catalogue (« ft ») est parfois faux : une clé USB rangée en « Chaussures »,
+   * une ceinture en « Vestes »… On le corrige avec ce que l'on sait de l'album :
+   *   - album nommé « … Sneakers » / « Claquette … » : c'est son nom qui fait foi ;
+   *   - album d'un type précis (Ceintures, Casquettes…) : un type incompatible est remplacé ;
+   *   - type isolé dans son album (≤ 5 articles et < 2 %) : jugé peu fiable, l'article n'est pas classé
+   *     (il reste visible dans sa marque et dans la recherche, mais pas dans une mauvaise catégorie).
+   */
+  function typeCorrige(p, album, compteTypes, total) {
+    const nom = album.n || "";
+    if (/sneaker|chaussure/i.test(nom)) return "Chaussures";
+    if (/claquette/i.test(nom)) return "Claquettes";
+    let ft = p.ft || "";
+    const compatibles = TYPES_COMPATIBLES[album.tp];
+    if (compatibles && ft && !compatibles.includes(ft)) ft = TYPES_ALBUM[album.tp] || "";
+    else if (!compatibles && ft) {
+      const n = compteTypes.get(ft) || 0;
+      if (n <= 5 && n / total < 0.02) ft = "";
+    }
+    if (!ft && album.tp && album.tp !== "Multi") ft = TYPES_ALBUM[album.tp] || "";
+    return ft;
+  }
+
   function lireCatalogueJSON(json, source) {
     const prefixe = json.prefix || "";
     const albums = new Map((json.categories || []).map((c) => [c.id, c]));
-    const parAlbum = new Map();
-    for (const p of json.products || []) parAlbum.set(p.a, (parAlbum.get(p.a) || 0) + 1);
+    const parAlbum = new Map(); // album -> { total, types: Map(type -> nombre) }
+    for (const p of json.products || []) {
+      let st = parAlbum.get(p.a);
+      if (!st) parAlbum.set(p.a, (st = { total: 0, types: new Map() }));
+      st.total++;
+      if (p.ft) st.types.set(p.ft, (st.types.get(p.ft) || 0) + 1);
+    }
     const articles = [];
     for (const p of json.products || []) {
       const album = albums.get(p.a);
       if (!album || !p.p || !p.s) continue;
       const nom = String(album.n || "").trim();
+      const st = parAlbum.get(p.a);
       const estOutfit = album.tp === "Outfit" || /outfit/i.test(nom);
-      const type = estOutfit ? "Outfits" : p.ft || TYPES_ALBUM[album.tp] || "";
+      const ft = estOutfit ? "" : typeCorrige(p, album, st.types, st.total);
+      const type = estOutfit ? "Outfits" : ft;
       // Album multi-produits (« Acne Studio ») : on précise le type ; album de modèle (« Dior B30 ») : son nom suffit
-      const titre = estOutfit
-        ? `Outfit ${(parAlbum.get(p.a) || 0) - (p.o || 0)}`
-        : album.tp === "Multi" || !album.tp
-          ? [nom, p.ft].filter(Boolean).join(" · ")
-          : nom;
+      const titre = estOutfit ? `Outfit ${st.total - (p.o || 0)}` : album.tp === "Multi" || !album.tp ? [nom, ft].filter(Boolean).join(" · ") : nom;
       const couleur = p.cl || p.fc || "";
       const base = urlSure(prefixe + p.p + "_" + p.s);
       articles.push({
@@ -575,8 +607,12 @@
         imageHD: base ? base + "_c.jpg" : "", // 800 px pour la fiche
         date: +p.u > 0 ? new Date(+p.u * 1000) : null,
         extras: [], // la couleur est déjà affichée sous le titre
-        marquesForcees: p.br ? [p.br] : [],
+        marquesForcees: p.br && p.br !== "Autre" ? [p.br] : [],
         album: nom,
+        // Album qui regroupe plusieurs marques (« Supreme / Palace / Divers ») : on n'en déduit pas la marque
+        albumMulti: /\/|\(|divers/i.test(nom),
+        // Le type vient de la source : on s'y fie d'abord, le nom de l'album sert de secours
+        classementSource: true,
         outfit: estOutfit,
         sources: [source],
       });

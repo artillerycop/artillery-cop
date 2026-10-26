@@ -1146,6 +1146,45 @@ dialog {
   font-size: 22px;
 }
 
+/* Explorer > Marques : une section par famille */
+.index-famille {
+  margin-top: 26px;
+}
+.index-famille__titre {
+  margin: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--filet-fort);
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.index-famille__titre a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  text-decoration: none;
+}
+.index-famille__titre span {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--discret);
+  white-space: nowrap;
+}
+.index-famille .index {
+  margin-top: 0;
+}
+
+/* Accueil : cartes « Univers » (familles de marques), plus larges que hautes */
+.mosaique--univers .groupe {
+  aspect-ratio: 4 / 3;
+}
+
 /* ---------- Suggestions de recherche ---------- */
 .suggestions {
   margin-top: 20px;

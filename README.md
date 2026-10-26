@@ -67,9 +67,22 @@ Le fonctionnement est le même que pour la v1 :
 
 - Pour mettre en ligne, déposez le dossier sur Netlify, GitHub Pages ou OVH, sans `outils/.cache`. Le fichier `netlify.toml` est déjà prêt.
 
-## Retirer des catégories ou des marques
+## Catégories : un seul classement
 
-Dans `config.js`, `exclureCategories` et `exclureMarques` retirent du site des catégories ou des marques, avec tous leurs articles. Actuellement : Building Blocks, Electronic, Perfume, Watch Box, Room Decor, Other, Électronique, Jouets, ainsi que les marques Apple et Kaws.
+Les deux tableurs et le catalogue JSON n'emploient pas les mêmes noms (« HOODIE », « Pulls à capuche »…), et leurs sections sont parfois fourre-tout. La liste `categories` de `config.js` définit donc un classement unique, en français. Chaque article y est rangé :
+
+1. **d'après son nom** : « Gucci Handbag » va dans Sacs à main, même s'il était dans la section CAP. La première catégorie dont un mot correspond l'emporte, d'où l'ordre de la liste ;
+2. **sinon d'après sa section ou catégorie d'origine**, via `sources`.
+
+Pour le catalogue JSON, c'est l'inverse : son type passe d'abord, mais il est corrigé quand il est manifestement faux. Un album « … Sneakers » contient des chaussures, et un type isolé dans un album (une clé USB classée « Chaussures » chez Corteiz) n'est pas retenu. L'article reste alors visible dans sa marque et dans la recherche, mais il n'est classé dans aucune catégorie.
+
+**Retirer une catégorie :** ajoutez `retiree: true`. Ses articles disparaissent du site. Actuellement : Boîtes à montres, Électronique, Parfums, Jouets (dont Building Blocks), Déco (Room Decor) et Autres (Other).
+
+**Retirer une marque :** ajoutez-la à `exclureMarques` (actuellement Apple et Kaws).
+
+## Marques et familles
+
+La liste `marques` est regroupée par famille : Luxe & haute couture, Créateurs & contemporain, Streetwear, Sport & sneakers, Outdoor & doudounes, Horlogerie & joaillerie. Chaque famille a sa page (`#/f/…`) et sa carte « Univers » sur l'accueil. Dans Explorer, les marques sont rangées par famille. Une marque n'apparaît qu'à partir de `minArticlesMarque` articles.
 
 ## Personnaliser
 
@@ -77,7 +90,7 @@ Dans `config.js` :
 
 - `titre`, `sousTitre`, `logo`, `accent` ;
 - `cartesAccueil` : nombre de cartes de marques et de catégories sur l'accueil ;
-- `aLaUne` : la section mise en avant ;
+- `aLaUne` : la section du tableur mise en avant (TOP PICK) ;
 - `minArticlesMarque` ;
 - la liste `marques`.
 
